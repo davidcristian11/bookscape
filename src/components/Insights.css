@@ -1,0 +1,104 @@
+.insights-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.insights-title {
+    font-family: Georgia, serif;
+    font-size: 2.5rem;
+    margin-bottom: 2rem;
+    color: var(--text-dark);
+}
+
+.charts-grid {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.chart-card {
+    flex: 1;
+    background: white;
+    padding: 2rem;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+}
+
+.chart-card h3 {
+    font-family: Georgia, serif;
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+.chart-wrapper {
+    height: 300px;
+    position: relative; /* Pentru a centra numărul în Donut Chart */
+}
+
+.donut-center-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem;
+    font-family: Georgia, serif;
+    color: var(--text-dark);
+    pointer-events: none; /* Ca să nu blocheze hover-ul pe grafic */
+}
+
+/* Stiluri Top Surse */
+.top-sources-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+}
+
+.top-sources-card h3 {
+    font-family: Georgia, serif;
+    margin-bottom: 1.5rem;
+}
+
+.sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.source-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-color);
+    padding: 1rem 1.5rem;
+    border-radius: 4px;
+}
+
+.source-info {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.source-rank {
+    font-family: Georgia, serif;
+    font-size: 1.2rem;
+    color: var(--text-gray);
+    font-weight: bold;
+}
+
+.source-name {
+    font-weight: 500;
+}
+
+.source-score {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.numeric-score {
+    font-weight: bold;
+    color: var(--text-dark);
+}

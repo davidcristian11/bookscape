@@ -1,0 +1,427 @@
+.library-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.library-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.library-header h1 {
+    font-family: Georgia, serif;
+    color: var(--text-dark);
+}
+
+.library-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.view-toggle {
+    display: flex;
+    border: 1px solid var(--text-dark);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.toggle-btn {
+    background: none;
+    border: none;
+    padding: 0.5rem 1.5rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.toggle-btn.active {
+    background: var(--primary-green);
+    color: white;
+}
+
+.scrape-btn {
+    background-color: var(--accent-orange);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* Stiluri Tabel */
+.table-container {
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    overflow: hidden;
+}
+
+.books-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.books-table th, .books-table td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.books-table th {
+    color: var(--text-gray);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.mock-cover {
+    width: 40px;
+    height: 60px;
+    background-color: #EAEAEA;
+    border-radius: 2px;
+}
+
+.author-text {
+    font-size: 0.85rem;
+    color: var(--text-gray);
+    margin-top: 0.2rem;
+}
+
+.genre-badge {
+    background-color: #E2EFE9;
+    color: var(--primary-green);
+    padding: 0.3rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.rating-stars {
+    color: var(--accent-orange);
+    letter-spacing: 2px;
+}
+
+.action-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    margin-right: 1rem;
+    text-decoration: none;
+}
+
+.action-icon.delete {
+    color: red;
+}
+
+/* Paginare */
+.pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1.5rem;
+    color: var(--text-gray);
+    font-size: 0.9rem;
+}
+
+.page-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.page-btn {
+    border: 1px solid var(--border-color);
+    background: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.page-btn.active {
+    background: var(--primary-green);
+    color: white;
+    border-color: var(--primary-green);
+}
+
+/* Detail Page Specifics */
+.back-link {
+    color: var(--text-dark);
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 2rem;
+    font-weight: 500;
+}
+
+.detail-cards-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.book-info-card, .review-card {
+    background: white;
+    padding: 2.5rem;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+}
+
+.book-info-card {
+    display: flex;
+    gap: 3rem;
+}
+
+.detail-cover-large {
+    width: 200px;
+    height: 300px;
+    background-color: #EAEAEA;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.detail-text-content h1 {
+    margin: 0 0 0.5rem 0;
+    font-family: Georgia, serif;
+}
+
+.detail-author {
+    color: var(--text-gray);
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+}
+
+.detail-meta {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+}
+
+.synopsis-section h4 {
+    color: var(--text-gray);
+    margin-bottom: 0.5rem;
+}
+
+.synopsis-section p {
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+.outline-btn {
+    border: 1px solid var(--accent-orange);
+    color: var(--accent-orange);
+    background: white;
+    padding: 0.6rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.review-card h3 {
+    font-family: Georgia, serif;
+    margin-bottom: 1.5rem;
+}
+
+.review-textarea {
+    width: 100%;
+    height: 150px;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+    margin-bottom: 1.5rem;
+}
+
+.review-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.text-delete-btn {
+    color: red;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+/* Stiluri pentru Modal */
+.modal-overlay {
+    position: fixed; /* Îl ține deasupra la tot ecranul */
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4); /* Fundal semi-transparent */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 4px;
+    width: 500px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+.modal-header h2 {
+    font-family: Georgia, serif;
+    margin: 0;
+}
+
+.close-btn {
+    background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-gray);
+}
+
+.modal-body {
+    display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;
+}
+
+.modal-body input {
+    padding: 0.8rem; border: 1px solid var(--border-color); border-radius: 4px; font-size: 1rem;
+}
+
+.modal-body input.input-error {
+    border-color: red;
+}
+
+.error-text {
+    color: red; font-size: 0.8rem; margin: 0;
+}
+
+.helper-text {
+    font-size: 0.8rem; color: var(--text-gray); margin-top: 0.5rem;
+}
+
+.modal-footer {
+    display: flex; gap: 1rem; justify-content: flex-end;
+}
+
+.cancel-btn {
+    background: white; border: 1px solid var(--border-color); padding: 0.6rem 1.5rem; border-radius: 4px; cursor: pointer;
+}
+
+.scrape-submit-btn {
+    background-color: var(--accent-orange); color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 4px; cursor: pointer; font-weight: bold;
+}
+
+/* ==========================================
+   Stiluri pentru Grid View (Silver Challenge)
+   ========================================== */
+.grid-container {
+    display: grid;
+    /* CSS Grid: Creează coloane flexibile care se adaptează la lățimea ecranului */
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.book-grid-card {
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+
+.book-grid-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+}
+
+.grid-cover {
+    width: 100%;
+    height: 280px;
+    background-color: #EAEAEA; /* Placeholder pentru copertă */
+}
+
+.grid-card-content {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.grid-card-content strong {
+    font-family: Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+    margin-bottom: 0.3rem;
+}
+
+.grid-card-footer {
+    margin-top: auto; /* Împinge conținutul la baza cardului */
+    padding-top: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.view-details-btn {
+    background-color: var(--bg-color);
+    color: var(--text-dark);
+    text-decoration: none;
+    padding: 0.4rem 1rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.view-details-btn:hover {
+    background-color: var(--primary-green);
+    color: white;
+    border-color: var(--primary-green);
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+    .library-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1.5rem;
+    }
+
+    .library-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Facem tabelul să aibă scroll orizontal pe telefon */
+    .table-container {
+        overflow-x: auto;
+    }
+
+    .books-table {
+        min-width: 800px; /* Forțăm lățimea ca să nu se înghesuie textul */
+    }
+
+    .detail-cards-layout {
+        flex-direction: column; /* Cardurile de detaliu și review se așează unul sub altul */
+    }
+
+    .book-info-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1.5rem;
+    }
+}

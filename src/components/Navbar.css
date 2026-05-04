@@ -1,0 +1,98 @@
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 4rem; /* Spațiere mai generoasă ca în Figma */
+    background-color: var(--bg-color); /* Aceeași culoare ca fundalul paginii */
+    /* Eliminăm border-bottom pentru a lăsa spațiul liber ca în design */
+}
+
+/* --- Zona de Logo --- */
+.navbar-logo a {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    text-decoration: none;
+    color: var(--primary-green);
+}
+
+.logo-text {
+    font-family: Georgia, serif;
+    font-size: 1.4rem;
+    font-weight: bold;
+    letter-spacing: -0.5px;
+}
+
+.book-icon {
+    color: var(--primary-green);
+}
+
+/* --- Zona de Link-uri --- */
+.navbar-links {
+    display: flex;
+    align-items: center;
+    gap: 2rem; /* Spațiu generos între link-uri */
+}
+
+.nav-link {
+    text-decoration: none;
+    color: var(--text-gray);
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+    color: var(--text-dark);
+}
+
+/* Evidențierea paginii curente */
+.nav-link.active {
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+/* Butonul de Sign Out (puțin mai subtil) */
+.nav-link.sign-out {
+    margin-left: 1rem;
+    opacity: 0.8;
+}
+
+.nav-link.sign-out:hover {
+    opacity: 1;
+}
+
+/* Butonul solid de Register (doar pentru paginile de auth) */
+.nav-btn-solid {
+    background-color: var(--primary-green);
+    color: white;
+    text-decoration: none;
+    padding: 0.6rem 1.5rem;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.nav-btn-solid:hover {
+    background-color: var(--primary-green-hover);
+}
+
+/* --- Responsive Design (Gold Challenge) --- */
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: column;
+        padding: 1rem;
+        gap: 1rem;
+    }
+
+    .navbar-links {
+        width: 100%;
+        justify-content: space-around; /* Distribuie link-urile pe tot ecranul */
+        gap: 0.5rem;
+    }
+
+    .nav-link {
+        font-size: 0.85rem;
+    }
+}

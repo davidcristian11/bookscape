@@ -1,0 +1,117 @@
+.nexus-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+    /* Setăm o înălțime fixă (ecranul minus bara de navigație) pentru ca planșa să aibă limite în care să te plimbi */
+    height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+}
+
+.nexus-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.nexus-header h1 {
+    font-family: Georgia, serif;
+    font-size: 2.5rem;
+    color: var(--text-dark);
+}
+
+.add-quote-btn {
+    background-color: var(--accent-orange);
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.canvas-wrapper {
+    flex: 1; /* Ocupă tot spațiul vertical rămas disponibil */
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: #FAFAFA;
+    overflow: hidden;
+}
+
+/* --- Stilurile pentru Nodul Personalizat (Cardul cu Citat) --- */
+.quote-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 6px;
+    width: 280px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+}
+
+.quote-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.mock-cover-small {
+    width: 30px;
+    height: 45px;
+    background-color: #EAEAEA;
+    border-radius: 2px;
+}
+
+.quote-source {
+    display: flex;
+    flex-direction: column;
+}
+
+.from-text {
+    color: var(--text-gray);
+    font-size: 0.8rem;
+}
+
+.quote-text {
+    font-family: Georgia, serif;
+    font-style: italic;
+    color: var(--text-dark);
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+    font-size: 1.05rem;
+}
+
+.quote-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.connect-btn {
+    flex: 1;
+    background-color: #E2EFE9;
+    color: var(--primary-green);
+    border: none;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-weight: bold;
+    margin-right: 1rem;
+    cursor: pointer;
+}
+
+.delete-node-btn {
+    background: none;
+    border: none;
+    color: red;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+/* Redefinim aspectul 'Handles' (punctele din care tragi liniile) */
+.custom-handle {
+    width: 12px;
+    height: 12px;
+    background-color: var(--primary-green) !important;
+    border: 2px solid white !important;
+}

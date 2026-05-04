@@ -1,0 +1,50 @@
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* 100vh înseamnă 100% din înălțimea ecranului minus estimarea navbar-ului */
+    min-height: calc(100vh - 80px);
+    padding: 2rem;
+}
+
+.auth-card {
+    display: flex;
+    width: 900px;
+    min-height: 500px;
+    background: white;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05); /* Umbra subtilă din design */
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.auth-quote-panel {
+    flex: 1; /* Ocupă spațiu proporțional */
+    background-color: var(--primary-green);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem;
+    text-align: center;
+}
+
+.quote-text {
+    font-family: Georgia, serif; /* Font cu serife pentru aspectul de carte */
+    font-size: 1.4rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.quote-author {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.auth-form-panel {
+    flex: 1.2; /* Panoul alb este puțin mai lat decât cel verde */
+    padding: 4rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}

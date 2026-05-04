@@ -1,0 +1,53 @@
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _validate_non_blank(value: str, field_name: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise ValueError(f"{field_name} must not be blank")
+    return cleaned
+
+
+class RegisterRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., min_length=5, max_length=150)
+    password: str = Field(..., min_length=4, max_length=100)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return _validate_non_blank(value, "name")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        cleaned = _validate_non_blank(value, "email").lower()
+        if "@" not in cleaned:
+            raise ValueError("email must be valid")
+        return cleaned
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=150)
+    password: str = Field(..., min_length=4, max_length=100)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        cleaned = _validate_non_blank(value, "email").lower()
+        if "@" not in cleaned:
+            raise ValueError("email must be valid")
+        return cleaned
+
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserResponse

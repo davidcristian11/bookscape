@@ -1,0 +1,105 @@
+.welcome-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 4rem;
+    /* 100vh (înălțimea ecranului) minus bara de navigație (aprox 80px) */
+    min-height: calc(100vh - 80px);
+}
+
+/* --- Partea Stângă (Text) --- */
+.welcome-text-section {
+    flex: 1; /* Ocupă jumătate din spațiu */
+    padding-right: 4rem;
+}
+
+.welcome-title {
+    font-family: Georgia, serif;
+    font-size: 3.5rem;
+    color: var(--text-dark);
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+}
+
+.welcome-description {
+    font-size: 1.2rem;
+    color: var(--text-gray);
+    margin-bottom: 2.5rem;
+    line-height: 1.6;
+    max-width: 550px;
+}
+
+.start-btn {
+    display: inline-block;
+    background-color: var(--accent-orange);
+    color: white;
+    text-decoration: none;
+    padding: 1rem 2rem;
+    border-radius: 4px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.start-btn:hover {
+    background-color: var(--accent-orange-hover);
+    transform: translateY(-2px); /* Un mic efect de ridicare la hover */
+}
+
+
+/* --- Partea Dreaptă (Vizualul) --- */
+.welcome-visual-section {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative; /* Esențial pentru ca elementele absolute să se raporteze la el */
+    height: 500px;
+}
+
+.center-circle {
+    width: 160px;
+    height: 160px;
+    background-color: var(--accent-orange);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-family: Georgia, serif;
+    font-size: 1.2rem;
+    text-align: center;
+    padding: 1rem;
+    box-shadow: 0 10px 30px rgba(199, 91, 51, 0.3);
+    z-index: 10; /* Ține cercul deasupra posibilelor margini ale cărților */
+}
+
+.orbiting-book {
+    width: 70px;
+    height: 100px;
+    background-color: #F0F0F0; /* Culoarea gri deschis din design */
+    border-radius: 4px;
+    position: absolute;
+    /* Centrarea elementului înainte de a-l roti și muta */
+    top: 50%;
+    left: 50%;
+    margin-top: -50px; /* Jumătate din înălțime */
+    margin-left: -35px; /* Jumătate din lățime */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 1024px) {
+    .welcome-container {
+        flex-direction: column;
+        text-align: center;
+        padding: 2rem;
+        gap: 4rem;
+    }
+
+    .welcome-text-section {
+        padding-right: 0;
+    }
+}

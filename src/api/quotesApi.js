@@ -1,4 +1,4 @@
-import { clearAuthSession, getAuthToken } from "../utils/authStorage";
+import { getAuthToken } from "../utils/authStorage";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -40,10 +40,10 @@ async function request(path, options = {}) {
     ...options,
   });
 
-  if (response.status === 401) {
-    clearAuthSession();
-    window.location.href = "/login";
-    throw new Error("Session expired. Please log in again.");
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      "Your in-memory server session expired after the backend restart. Please log in again to sync your offline changes."
+    );
   }
 
   if (response.status === 204) {

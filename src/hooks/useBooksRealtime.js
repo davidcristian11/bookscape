@@ -15,6 +15,8 @@ function toWebSocketBaseUrl(httpUrl) {
 
 export default function useBooksRealtime(onEvent = null) {
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState("connecting");
+  const [realtimeMessage, setRealtimeMessage] = useState("Realtime updates connecting...");
   const callbackRef = useRef(onEvent);
 
   useEffect(() => {
@@ -30,16 +32,25 @@ export default function useBooksRealtime(onEvent = null) {
     let websocket = null;
     let disposed = false;
     let reconnectTimer = null;
+    let reconnectAttempt = 0;
 
     const connect = () => {
       if (disposed) return;
+      setRealtimeStatus("connecting");
+      setRealtimeMessage("Realtime updates connecting...");
 
       websocket = new WebSocket(
         `${toWebSocketBaseUrl(API_BASE_URL)}/ws/books?token=${encodeURIComponent(token)}`
       );
 
       websocket.onopen = () => {
+        reconnectAttempt = 0;
         setIsRealtimeConnected(true);
+        setRealtimeStatus("connected");
+        setRealtimeMessage("Realtime updates connected");
+        if (typeof callbackRef.current === "function") {
+          callbackRef.current({ type: "ws_reconnected" });
+        }
       };
 
       websocket.onmessage = (event) => {
@@ -72,11 +83,19 @@ export default function useBooksRealtime(onEvent = null) {
 
         if (event.code === 4401) {
           clearAuthSession();
+          window.sessionStorage.setItem(
+            "bookscape_session_message",
+            "Your in-memory session expired after the server restart. Please log in again."
+          );
           window.location.href = "/login";
           return;
         }
 
-        reconnectTimer = window.setTimeout(connect, 2000);
+        reconnectAttempt += 1;
+        const delay = Math.min(30000, 1000 * 2 ** reconnectAttempt);
+        setRealtimeStatus("retrying");
+        setRealtimeMessage("Realtime updates disconnected, retrying...");
+        reconnectTimer = window.setTimeout(connect, delay);
       };
 
       websocket.onerror = () => {
@@ -110,5 +129,7 @@ export default function useBooksRealtime(onEvent = null) {
 
   return {
     isRealtimeConnected,
+    realtimeStatus,
+    realtimeMessage,
   };
 }

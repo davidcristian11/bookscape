@@ -3,7 +3,8 @@ import { getStoredUser } from "./authStorage";
 const BOOKS_CHANGED_EVENT = "bookscape:books-changed";
 
 function getCurrentUserScope() {
-  return getStoredUser()?.id ?? "anonymous";
+  const user = getStoredUser();
+  return user?.email ?? user?.id ?? "anonymous";
 }
 
 function getBooksStorageKey() {
@@ -46,15 +47,28 @@ export function mergeLocalBooks(incomingBooks) {
   const indexById = new Map(
     currentBooks.map((book, index) => [book.id, index])
   );
+  const indexByClientMutationId = new Map(
+    currentBooks
+      .map((book, index) => [book._clientMutationId, index])
+      .filter(([clientMutationId]) => Boolean(clientMutationId))
+  );
 
   const nextBooks = [...currentBooks];
 
   for (const incomingBook of incomingBooks) {
-    const existingIndex = indexById.get(incomingBook.id);
+    const existingIndex =
+      indexById.get(incomingBook.id) ??
+      indexByClientMutationId.get(incomingBook._clientMutationId);
 
     if (existingIndex === undefined) {
       nextBooks.push(incomingBook);
       indexById.set(incomingBook.id, nextBooks.length - 1);
+      if (incomingBook._clientMutationId) {
+        indexByClientMutationId.set(
+          incomingBook._clientMutationId,
+          nextBooks.length - 1
+        );
+      }
     } else {
       nextBooks[existingIndex] = {
         ...nextBooks[existingIndex],
@@ -69,7 +83,10 @@ export function mergeLocalBooks(incomingBooks) {
 export function upsertLocalBook(book) {
   const currentBooks = getLocalBooksCache();
   const existingIndex = currentBooks.findIndex(
-    (currentBook) => currentBook.id === book.id
+    (currentBook) =>
+      currentBook.id === book.id ||
+      (book._clientMutationId &&
+        currentBook._clientMutationId === book._clientMutationId)
   );
 
   if (existingIndex === -1) {
@@ -114,20 +131,24 @@ export function getLocalPaginatedBooks(page = 1, pageSize = 10) {
 export function computeLocalBookStats() {
   const books = getLocalBooksCache();
 
-  const booksByStatus = {
-    "to-read": 0,
-    reading: 0,
-    finished: 0,
-  };
-
   const booksByGenre = {};
+  const booksBySource = {};
+  const booksByMonth = {};
+  const sourceRatings = {};
 
   for (const book of books) {
-    if (booksByStatus[book.status] !== undefined) {
-      booksByStatus[book.status] += 1;
-    }
-
     booksByGenre[book.genre] = (booksByGenre[book.genre] ?? 0) + 1;
+    booksBySource[book.source || "Manual"] =
+      (booksBySource[book.source || "Manual"] ?? 0) + 1;
+
+    const month = book.created_at
+      ? String(book.created_at).slice(0, 7)
+      : "offline";
+    booksByMonth[month] = (booksByMonth[month] ?? 0) + 1;
+
+    const source = book.source || "Manual";
+    sourceRatings[source] = sourceRatings[source] || [];
+    sourceRatings[source].push(Number(book.rating || 0));
   }
 
   const averageRating =
@@ -140,10 +161,24 @@ export function computeLocalBookStats() {
         )
       : null;
 
+  const topRatedSources = Object.fromEntries(
+    Object.entries(sourceRatings).map(([source, ratings]) => [
+      source,
+      Number(
+        (
+          ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
+        ).toFixed(2)
+      ),
+    ])
+  );
+
   return {
     total_books: books.length,
     average_rating: averageRating,
-    books_by_status: booksByStatus,
     books_by_genre: booksByGenre,
+    books_by_source: booksBySource,
+    books_by_month: booksByMonth,
+    top_rated_sources: topRatedSources,
+    quotes_per_book: {},
   };
 }

@@ -3,7 +3,8 @@ import { getStoredUser } from "../utils/authStorage.js";
 const OFFLINE_QUEUE_EVENT = "bookscape:offline-queue-changed";
 
 function getCurrentUserScope() {
-  return getStoredUser()?.id ?? "anonymous";
+  const user = getStoredUser();
+  return user?.email ?? user?.id ?? "anonymous";
 }
 
 function getOfflineQueueStorageKey() {
@@ -25,6 +26,10 @@ function writeJson(key, value) {
 
 function emitOfflineQueueChanged() {
   window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_EVENT));
+}
+
+function buildOperationId(type, id) {
+  return `${type}-${id}`;
 }
 
 export function getOfflineQueueEventName() {
@@ -52,10 +57,21 @@ export function getOfflineQueueCount() {
 export function enqueueCreateOperation(tempId, payload) {
   const queue = getOfflineQueue();
 
+  if (
+    queue.some(
+      (operation) =>
+        operation.type === "create" && operation.tempId === tempId
+    )
+  ) {
+    return setOfflineQueue(queue);
+  }
+
   queue.push({
+    id: buildOperationId("create", tempId),
     type: "create",
     tempId,
     payload,
+    status: "pending",
   });
 
   return setOfflineQueue(queue);
@@ -99,9 +115,11 @@ export function enqueueUpdateOperation(bookId, payload) {
   }
 
   queue.push({
+    id: buildOperationId("update", bookId),
     type: "update",
     bookId,
     payload,
+    status: "pending",
   });
 
   return setOfflineQueue(queue);
@@ -136,8 +154,10 @@ export function enqueueDeleteOperation(bookId) {
   );
 
   nextQueue.push({
+    id: buildOperationId("delete", bookId),
     type: "delete",
     bookId,
+    status: "pending",
   });
 
   return setOfflineQueue(nextQueue);

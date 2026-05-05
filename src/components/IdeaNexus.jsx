@@ -1,29 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ReactFlow, {
-  Background,
-  Controls,
-  Handle,
-  Position,
-  addEdge,
-  applyEdgeChanges,
-  applyNodeChanges,
-} from "reactflow";
+import ReactFlow, { Background, Controls, Handle, Position, addEdge, applyEdgeChanges, applyNodeChanges } from "reactflow";
 import "reactflow/dist/style.css";
+import { getBooks } from "../api/booksApi";
+import { createQuote, deleteQuote, getQuotesByBook, updateQuote } from "../api/quotesApi";
+import useBooksOfflineSync from "../hooks/useBooksOfflineSync";
 import "./IdeaNexus.css";
-import {
-  createNexusEdge,
-  createNexusNode,
-  deleteNexusEdge,
-  deleteNexusNode,
-  getNexusGraph,
-  updateNexusNode,
-} from "../api/nexusApi";
 
 function QuoteCardNode({ data }) {
   return (
     <div className="quote-card">
       <Handle type="target" position={Position.Top} className="custom-handle" />
-
       <div className="quote-meta">
         <div className="mock-cover-small"></div>
         <div className="quote-source">
@@ -31,250 +17,249 @@ function QuoteCardNode({ data }) {
           <strong>{data.bookTitle}</strong>
         </div>
       </div>
-
       <p className="quote-text">"{data.quote}"</p>
-
+      {data.relationshipLabel && <span className="genre-badge">{data.relationshipLabel}</span>}
       <div className="quote-actions">
-        <button
-          className="connect-btn"
-          type="button"
-          onClick={() =>
-            alert("Use the handles to drag a connection between cards.")
-          }
-        >
-          Connect
-        </button>
-        <button
-          className="delete-node-btn"
-          type="button"
-          onClick={() => data.onDelete?.(data.id)}
-        >
-          🗑️
+        <button className="delete-node-btn" type="button" onClick={() => data.onDelete?.(data.id)}>
+          Delete
         </button>
       </div>
-
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="custom-handle"
-      />
+      <Handle type="source" position={Position.Bottom} className="custom-handle" />
     </div>
   );
 }
 
 const nodeTypes = { customQuote: QuoteCardNode };
 
-function mapBackendNodeToReactFlow(node, onDelete) {
-  return {
-    id: node.id,
-    type: "customQuote",
-    position: { x: node.x, y: node.y },
-    data: {
-      id: node.id,
-      bookTitle: node.book_title,
-      quote: node.quote,
-      onDelete,
-    },
-  };
-}
-
-function mapBackendEdgeToReactFlow(edge) {
-  return {
-    id: edge.id,
-    source: edge.source_id,
-    target: edge.target_id,
-    animated: true,
-    label: edge.label || undefined,
-  };
-}
-
 export default function IdeaNexus() {
+  const [books, setBooks] = useState([]);
+  const [quoteCards, setQuoteCards] = useState([]);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
+  const [form, setForm] = useState({ book_id: "", quote: "", note: "", relationship_label: "Related" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const handleDeleteNode = useCallback(
-    async (nodeId) => {
-      const confirmed = window.confirm(
-        "Are you sure you want to delete this quote card?"
-      );
-      if (!confirmed) return;
-
-      try {
-        await deleteNexusNode(nodeId);
-
-        setNodes((prev) => prev.filter((node) => node.id !== nodeId));
-        setEdges((prev) =>
-          prev.filter(
-            (edge) => edge.source !== nodeId && edge.target !== nodeId
-          )
-        );
-      } catch (err) {
-        alert(err.message || "Failed to delete node.");
-      }
-    },
-    []
+  const bookTitleById = useMemo(
+    () => Object.fromEntries(books.map((book) => [book.id, book.title])),
+    [books]
   );
 
-  const loadGraph = useCallback(async () => {
+  const buildEdges = useCallback((cards) => {
+    const groupedByLabel = new Map();
+    for (const card of cards) {
+      if (!card.relationship_label) continue;
+      const list = groupedByLabel.get(card.relationship_label) || [];
+      list.push(card);
+      groupedByLabel.set(card.relationship_label, list);
+    }
+
+    const nextEdges = [];
+    for (const [label, cardsForLabel] of groupedByLabel.entries()) {
+      for (let index = 0; index < cardsForLabel.length - 1; index += 1) {
+        nextEdges.push({
+          id: `${label}-${cardsForLabel[index].id}-${cardsForLabel[index + 1].id}`,
+          source: cardsForLabel[index].id,
+          target: cardsForLabel[index + 1].id,
+          label,
+          animated: true,
+        });
+      }
+    }
+    return nextEdges;
+  }, []);
+
+  const mapQuoteToNode = useCallback(
+    (card) => ({
+      id: card.id,
+      type: "customQuote",
+      position: { x: card.position_x || 0, y: card.position_y || 0 },
+      data: {
+        id: card.id,
+        bookTitle: bookTitleById[card.book_id] || "Book",
+        quote: card.quote,
+        relationshipLabel: card.relationship_label,
+        onDelete: handleDeleteNode,
+      },
+    }),
+    [bookTitleById]
+  );
+
+  const loadBoard = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-
-      const data = await getNexusGraph();
-
-      setNodes(
-        data.nodes.map((node) =>
-          mapBackendNodeToReactFlow(node, handleDeleteNode)
-        )
-      );
-      setEdges(data.edges.map(mapBackendEdgeToReactFlow));
+      const page = await getBooks(1, 100);
+      const loadedBooks = page.items;
+      const quoteLists = await Promise.all(loadedBooks.map((book) => getQuotesByBook(book.id)));
+      const loadedQuotes = quoteLists.flat();
+      setBooks(loadedBooks);
+      setQuoteCards(loadedQuotes);
+      if (!form.book_id && loadedBooks[0]) {
+        setForm((prev) => ({ ...prev, book_id: loadedBooks[0].id }));
+      }
     } catch (err) {
-      setError(err.message || "Failed to load Idea Nexus.");
+      const message = err?.message || "";
+      setError(
+        message.toLowerCase().includes("failed to fetch")
+          ? "Idea Nexus could not reach the server. Check that the backend is running, then try again."
+          : message || "Idea Nexus could not load your quote cards. Please try again."
+      );
     } finally {
       setLoading(false);
     }
-  }, [handleDeleteNode]);
+  }, [form.book_id]);
 
   useEffect(() => {
-    loadGraph();
-  }, [loadGraph]);
+    loadBoard();
+  }, [loadBoard]);
 
-  const onNodesChange = useCallback((changes) => {
-    setNodes((nds) => applyNodeChanges(changes, nds));
-  }, []);
+  const {
+    isOfflineMode,
+    connectionMessage,
+    queueText,
+    refreshConnectionState,
+  } = useBooksOfflineSync(loadBoard);
 
-  const onEdgesChange = useCallback((changes) => {
-    setEdges((eds) => applyEdgeChanges(changes, eds));
-  }, []);
+  useEffect(() => {
+    const retryAfterOnline = () => {
+      window.setTimeout(() => {
+        refreshConnectionState();
+        loadBoard();
+      }, 200);
+    };
 
-  const onConnect = useCallback(async (connection) => {
-    try {
-      const createdEdge = await createNexusEdge({
-        source_id: connection.source,
-        target_id: connection.target,
-        label: "Related",
-      });
+    window.addEventListener("online", retryAfterOnline);
 
-      setEdges((eds) =>
-        addEdge(
-          {
-            id: createdEdge.id,
-            source: createdEdge.source_id,
-            target: createdEdge.target_id,
-            animated: true,
-            label: createdEdge.label || undefined,
-          },
-          eds
-        )
-      );
-    } catch (err) {
-      alert(err.message || "Failed to create connection.");
+    return () => {
+      window.removeEventListener("online", retryAfterOnline);
+    };
+  }, [loadBoard, refreshConnectionState]);
+
+  useEffect(() => {
+    setNodes(quoteCards.map(mapQuoteToNode));
+    setEdges(buildEdges(quoteCards));
+  }, [quoteCards, mapQuoteToNode, buildEdges]);
+
+  async function handleDeleteNode(nodeId) {
+    if (!window.confirm("Delete this quote card?")) return;
+    await deleteQuote(nodeId);
+    setQuoteCards((prev) => prev.filter((card) => card.id !== nodeId));
+  }
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddQuoteCard = async (event) => {
+    event.preventDefault();
+    if (!form.book_id || !form.quote.trim()) {
+      setError("Choose a book and enter quote text.");
+      return;
     }
-  }, []);
-
-  const handleAddQuoteCard = async () => {
-    const bookTitle = window.prompt("Book title:");
-    if (!bookTitle || !bookTitle.trim()) return;
-
-    const quote = window.prompt("Quote:");
-    if (!quote || !quote.trim()) return;
 
     try {
-      const createdNode = await createNexusNode({
-        book_title: bookTitle.trim(),
-        quote: quote.trim(),
-        x: 250 + Math.random() * 150,
-        y: 120 + Math.random() * 150,
+      setError("");
+      const created = await createQuote(form.book_id, {
+        quote: form.quote.trim(),
+        note: form.note.trim() || null,
+        relationship_label: form.relationship_label.trim() || null,
+        position_x: 120 + Math.random() * 300,
+        position_y: 120 + Math.random() * 180,
       });
-
-      setNodes((prev) => [
-        ...prev,
-        mapBackendNodeToReactFlow(createdNode, handleDeleteNode),
-      ]);
+      setQuoteCards((prev) => [...prev, created]);
+      setForm((prev) => ({ ...prev, quote: "", note: "" }));
     } catch (err) {
-      alert(err.message || "Failed to create quote card.");
+      setError(err.message || "Could not add the quote card. Please try again.");
     }
   };
+
+  const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
+  const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
+  const onConnect = useCallback((connection) => {
+    setEdges((eds) => addEdge({ ...connection, animated: true, label: "Related" }, eds));
+  }, []);
 
   const handleNodeDragStop = async (_event, node) => {
-    try {
-      await updateNexusNode(node.id, {
-        x: node.position.x,
-        y: node.position.y,
-      });
-    } catch (err) {
-      alert(err.message || "Failed to save node position.");
-    }
-  };
-
-  const handleEdgeClick = async (_event, edge) => {
-    const confirmed = window.confirm(
-      "Do you want to delete this connection?"
+    await updateQuote(node.id, {
+      position_x: node.position.x,
+      position_y: node.position.y,
+    });
+    setQuoteCards((prev) =>
+      prev.map((card) =>
+        card.id === node.id
+          ? { ...card, position_x: node.position.x, position_y: node.position.y }
+          : card
+      )
     );
-    if (!confirmed) return;
-
-    try {
-      await deleteNexusEdge(edge.id);
-      setEdges((prev) => prev.filter((item) => item.id !== edge.id));
-    } catch (err) {
-      alert(err.message || "Failed to delete connection.");
-    }
   };
-
-  const enrichedNodes = useMemo(
-    () =>
-      nodes.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          onDelete: handleDeleteNode,
-        },
-      })),
-    [nodes, handleDeleteNode]
-  );
 
   if (loading) {
-    return (
-      <div className="nexus-container">
-        <div className="nexus-header">
-          <h1>Idea Nexus</h1>
-        </div>
-        <p>Loading Idea Nexus...</p>
-      </div>
-    );
+    return <div className="nexus-container"><div className="nexus-header"><h1>Idea Nexus</h1></div><p>Loading Idea Nexus...</p></div>;
   }
 
-  if (error) {
-    return (
-      <div className="nexus-container">
-        <div className="nexus-header">
-          <h1>Idea Nexus</h1>
-        </div>
-        <p className="error-text">{error}</p>
-      </div>
-    );
-  }
+  const showOfflineState = isOfflineMode || !navigator.onLine || Boolean(queueText);
+  const showServerError = Boolean(error) && !showOfflineState;
 
   return (
     <div className="nexus-container">
       <div className="nexus-header">
         <h1>Idea Nexus</h1>
-        <button className="add-quote-btn" onClick={handleAddQuoteCard}>
-          + Add Quote Card
-        </button>
       </div>
+
+      <form className="nexus-form" onSubmit={handleAddQuoteCard}>
+        <select name="book_id" value={form.book_id} onChange={handleChange} disabled={books.length === 0}>
+          {books.length === 0 && <option value="">No books available</option>}
+          {books.map((book) => <option key={book.id} value={book.id}>{book.title}</option>)}
+        </select>
+        <input name="quote" placeholder="Quote text" value={form.quote} onChange={handleChange} />
+        <input name="relationship_label" placeholder="Relationship label" value={form.relationship_label} onChange={handleChange} />
+        <input name="note" placeholder="Optional note" value={form.note} onChange={handleChange} />
+        <button className="add-quote-btn" type="submit">Add Quote Card</button>
+      </form>
+
+      {showOfflineState && (
+        <div className="review-card connection-banner" role="status">
+          <h3 style={{ marginBottom: "0.75rem" }}>
+            {!navigator.onLine ? "Offline mode active" : connectionMessage}
+          </h3>
+          <p style={{ margin: 0, color: "var(--text-gray)" }}>
+            Idea Nexus will refresh when BookScape can reach the server again.
+          </p>
+          {queueText && (
+            <p style={{ margin: "0.75rem 0 0 0", fontWeight: "bold" }}>
+              {queueText}
+            </p>
+          )}
+          <button
+            className="cancel-btn"
+            type="button"
+            onClick={loadBoard}
+            style={{ marginTop: "1rem" }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {showServerError && (
+        <div className="review-card" style={{ marginBottom: "1.5rem" }}>
+          <p className="error-text">{error}</p>
+          <button className="cancel-btn" type="button" onClick={loadBoard}>
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="canvas-wrapper">
         <ReactFlow
-          nodes={enrichedNodes}
+          nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDragStop={handleNodeDragStop}
-          onEdgeClick={handleEdgeClick}
           nodeTypes={nodeTypes}
           fitView
         >

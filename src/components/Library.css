@@ -52,6 +52,26 @@
     font-weight: bold;
 }
 
+.faker-toggle-btn {
+    background-color: #2f5d50;
+}
+
+.faker-toggle-btn.danger {
+    background-color: #9f1239;
+}
+
+.connection-banner {
+    margin-bottom: 1.5rem;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    animation: statusPulseIn 0.24s ease both;
+}
+
+.connection-banner.syncing {
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
 /* Stiluri Tabel */
 .table-container {
     background: white;
@@ -266,7 +286,12 @@
     padding: 2rem;
     border-radius: 4px;
     width: 500px;
+    max-width: min(92vw, 620px);
+    max-height: 88vh;
+    overflow: hidden;
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-header {
@@ -288,7 +313,19 @@
 }
 
 .modal-body {
-    display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    overflow-y: auto;
+    max-height: min(56vh, 520px);
+    padding-right: 0.25rem;
+}
+
+.modal-body textarea,
+.modal-body input,
+.modal-body select {
+    max-width: 100%;
 }
 
 .modal-body input {
@@ -309,6 +346,7 @@
 
 .modal-footer {
     display: flex; gap: 1rem; justify-content: flex-end;
+    flex-shrink: 0;
 }
 
 .cancel-btn {
@@ -423,5 +461,116 @@
         align-items: center;
         text-align: center;
         gap: 1.5rem;
+    }
+
+    .modal-content {
+        width: auto;
+        padding: 1.25rem;
+    }
+}
+
+.library-container {
+    animation: pageFadeIn 0.28s ease both;
+}
+
+.table-container,
+.book-info-card,
+.review-card,
+.book-grid-card,
+.modal-content {
+    border-radius: 8px;
+    border: 1px solid rgba(44, 74, 62, 0.08);
+    box-shadow: 0 10px 30px rgba(44, 74, 62, 0.07);
+}
+
+.books-table th {
+    background: #fbfaf7;
+}
+
+.books-table tbody tr,
+.scrape-btn,
+.scrape-submit-btn,
+.cancel-btn,
+.view-details-btn,
+.action-icon,
+.text-delete-btn {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.books-table tbody tr:hover {
+    background: #fbfaf7;
+}
+
+.scrape-btn:hover,
+.scrape-submit-btn:hover,
+.cancel-btn:hover,
+.view-details-btn:hover,
+.action-icon:hover,
+.text-delete-btn:hover {
+    transform: translateY(-1px);
+}
+
+.action-icon {
+    background: #f8f7f4;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-dark);
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-right: 0.5rem;
+    padding: 0.45rem 0.75rem;
+}
+
+.action-icon.delete,
+.text-delete-btn {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-radius: 4px;
+    color: #9f1239;
+    padding: 0.55rem 0.85rem;
+}
+
+.modal-overlay {
+    animation: overlayFadeIn 0.18s ease both;
+}
+
+.modal-content {
+    animation: modalSlideIn 0.2s ease both;
+}
+
+.success-text {
+    color: var(--primary-green);
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+@keyframes pageFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes overlayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+    from { opacity: 0; transform: translateY(14px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes statusPulseIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
     }
 }

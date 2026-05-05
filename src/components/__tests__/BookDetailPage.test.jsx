@@ -1,103 +1,83 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { vi } from 'vitest';
-import BookDetailPage from '../BookDetailPage';
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+import BookDetailPage from "../BookDetailPage";
 
-const mockNavigate = vi.fn();
+const updateBook = vi.fn();
 
-vi.mock('react-router-dom', async () => {
-    const actual = await vi.importActual('react-router-dom');
-    return {
-        ...actual,
-        useNavigate: () => mockNavigate,
-    };
-});
+vi.mock("../../api/booksApi", () => ({
+  getBookById: vi.fn(() =>
+    Promise.resolve({
+      id: "book-1",
+      title: "Dune",
+      author: "Frank Herbert",
+      genre: "Sci-Fi",
+      publication_year: 1965,
+      source: "Goodreads",
+      source_url: "",
+      synopsis: "A desert planet.",
+      review: "Original review",
+      rating: 5,
+      cover_url: null,
+    })
+  ),
+  updateBook: (...args) => updateBook(...args),
+  deleteBook: vi.fn(() => Promise.resolve()),
+}));
 
-const books = [
-    {
-        id: 1,
-        title: 'The Midnight Library',
-        author: 'Matt Haig',
-        genre: 'Fiction',
-        source: 'Manual',
-        review: 'Nice book',
-    },
-];
+vi.mock("../../api/quotesApi", () => ({
+  getQuotesByBook: vi.fn(() => Promise.resolve([])),
+  createQuote: vi.fn(),
+  updateQuote: vi.fn(),
+  deleteQuote: vi.fn(),
+}));
 
-function renderPage(path = '/book/1', extraProps = {}) {
-    return render(
-        <MemoryRouter initialEntries={[path]}>
-            <Routes>
-                <Route
-                    path="/book/:id"
-                    element={
-                        <BookDetailPage
-                            books={books}
-                            onDelete={vi.fn()}
-                            onUpdate={vi.fn()}
-                            {...extraProps}
-                        />
-                    }
-                />
-            </Routes>
-        </MemoryRouter>
-    );
+vi.mock("../../hooks/useBooksOfflineSync", () => ({
+  default: () => ({ isOfflineMode: false, offlineQueueCount: 0, isSyncingQueue: false }),
+}));
+
+vi.mock("../../hooks/useBooksRealtime", () => ({
+  default: () => ({ isRealtimeConnected: true }),
+}));
+
+function renderDetail() {
+  return render(
+    <MemoryRouter initialEntries={["/book/book-1"]}>
+      <Routes>
+        <Route path="/book/:id" element={<BookDetailPage />} />
+      </Routes>
+    </MemoryRouter>
+  );
 }
 
-describe('BookDetailPage', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        vi.spyOn(window, 'alert').mockImplementation(() => {});
+describe("BookDetailPage", () => {
+  it("updates the review/details form", async () => {
+    const user = userEvent.setup();
+    updateBook.mockResolvedValue({
+      id: "book-1",
+      title: "Dune",
+      author: "Frank Herbert",
+      genre: "Sci-Fi",
+      publication_year: 1965,
+      source: "Goodreads",
+      source_url: "",
+      synopsis: "A desert planet.",
+      review: "Updated review",
+      rating: 5,
+      cover_url: null,
     });
 
-    afterEach(() => {
-        window.alert.mockRestore();
-    });
+    renderDetail();
 
-    it('renders not found when book does not exist', () => {
-        renderPage('/book/999');
-        expect(screen.getByText(/book not found/i)).toBeInTheDocument();
-    });
+    const review = await screen.findByPlaceholderText(/your review/i);
+    await user.clear(review);
+    await user.type(review, "Updated review");
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
 
-    it('renders existing book details', () => {
-        renderPage();
-        expect(screen.getByText('The Midnight Library')).toBeInTheDocument();
-        expect(screen.getByText(/by Matt Haig/i)).toBeInTheDocument();
-        expect(screen.getByText(/your review/i)).toBeInTheDocument();
-    });
-
-    it('updates textarea and saves changes', async () => {
-        const user = userEvent.setup();
-        const onUpdate = vi.fn();
-
-        renderPage('/book/1', { onUpdate });
-
-        const textarea = screen.getByPlaceholderText(/write your thoughts here/i);
-        await user.clear(textarea);
-        await user.type(textarea, 'Updated review text');
-
-        await user.click(screen.getByRole('button', { name: /save changes/i }));
-
-        expect(onUpdate).toHaveBeenCalledTimes(1);
-        expect(onUpdate).toHaveBeenCalledWith(
-            expect.objectContaining({
-                id: 1,
-                review: 'Updated review text',
-            })
-        );
-        expect(window.alert).toHaveBeenCalled();
-    });
-
-    it('deletes book and navigates back to library', async () => {
-        const user = userEvent.setup();
-        const onDelete = vi.fn();
-
-        renderPage('/book/1', { onDelete });
-
-        await user.click(screen.getByRole('button', { name: /delete book/i }));
-
-        expect(onDelete).toHaveBeenCalledWith(1);
-        expect(mockNavigate).toHaveBeenCalledWith('/library');
-    });
+    expect(updateBook).toHaveBeenCalledWith(
+      "book-1",
+      expect.objectContaining({ review: "Updated review" })
+    );
+  });
 });

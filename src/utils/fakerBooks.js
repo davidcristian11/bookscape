@@ -13,7 +13,7 @@ const genres = [
   "Horror",
 ];
 
-const statuses = ["to-read", "reading", "finished"];
+const sources = ["Goodreads", "Amazon", "Barnes & Noble", "Open Library"];
 
 const titlePrefixes = [
   "The Silent",
@@ -52,8 +52,11 @@ function buildFakeBook() {
     title: buildFakeTitle(),
     author: faker.person.fullName(),
     genre: faker.helpers.arrayElement(genres),
-    year: faker.number.int({ min: 1950, max: new Date().getFullYear() }),
-    status: faker.helpers.arrayElement(statuses),
+    publication_year: faker.number.int({ min: 1950, max: new Date().getFullYear() }),
+    source: faker.helpers.arrayElement(sources),
+    source_url: null,
+    synopsis: faker.lorem.paragraph(),
+    review: "",
     rating: faker.number.int({ min: 1, max: 5 }),
     cover_url: null,
   };

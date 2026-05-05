@@ -1,4 +1,5 @@
 import threading
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from faker import Faker
@@ -36,11 +37,16 @@ class FakerAutomationService:
             "Historical Fiction",
             "Horror",
         ]
-        self._statuses = ["to-read", "reading", "finished"]
-
     def is_running(self, user_id: str) -> bool:
         thread = self._threads.get(user_id)
         return thread is not None and thread.is_alive()
+
+    def get_status(self, user_id: str) -> FakerLoopStatusResponse:
+        return FakerLoopStatusResponse(
+            message="Faker loop is running" if self.is_running(user_id) else "Faker loop is stopped",
+            running=self.is_running(user_id),
+            interval_seconds=self._intervals.get(user_id) if self.is_running(user_id) else None,
+        )
 
     def force_reset(self) -> None:
         for stop_event in self._stop_events.values():
@@ -60,10 +66,15 @@ class FakerAutomationService:
             title=self._faker.sentence(nb_words=3).rstrip("."),
             author=self._faker.name(),
             genre=self._faker.random_element(self._genres),
-            year=self._faker.random_int(min=1950, max=2025),
-            status=self._faker.random_element(self._statuses),
+            publication_year=self._faker.random_int(min=1950, max=2025),
+            source=self._faker.random_element(["Goodreads", "Amazon", "Barnes & Noble", "Manual"]),
+            source_url=None,
+            synopsis=self._faker.paragraph(nb_sentences=3),
+            review="",
             rating=self._faker.random_int(min=1, max=5),
             cover_url=None,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
     def _run_loop(
@@ -81,7 +92,7 @@ class FakerAutomationService:
                 {
                     "type": "book_created",
                     "source": "faker_loop",
-                    "book": BookResponse.model_validate(book).model_dump(),
+                    "book": BookResponse.model_validate(book).model_dump(mode="json"),
                 },
             )
 

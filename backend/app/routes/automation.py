@@ -8,6 +8,13 @@ from app.schemas.automation import FakerLoopStartRequest, FakerLoopStatusRespons
 router = APIRouter(prefix="/automation", tags=["automation"])
 
 
+@router.get("/faker/status", response_model=FakerLoopStatusResponse)
+async def get_faker_loop_status(
+    current_user: UserResponse = Depends(require_authenticated_user),
+) -> FakerLoopStatusResponse:
+    return faker_automation_service.get_status(current_user.id)
+
+
 @router.post("/faker/start", response_model=FakerLoopStatusResponse)
 async def start_faker_loop(
     payload: FakerLoopStartRequest,

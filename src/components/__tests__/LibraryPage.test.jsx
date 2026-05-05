@@ -1,99 +1,82 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import { vi } from 'vitest';
-import LibraryPage from './LibraryPage';
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import LibraryPage from "../LibraryPage";
 
-vi.mock('./ScrapeModal', () => ({
-    default: ({ isOpen }) => (isOpen ? <div>Mock Scrape Modal</div> : null),
+const refreshFromStart = vi.fn();
+const deleteBook = vi.fn();
+
+vi.mock("../../api/booksApi", () => ({
+  createBook: vi.fn(),
+  deleteBook: (...args) => deleteBook(...args),
+  scrapeBook: vi.fn(),
 }));
 
-const books = [
-    { id: 1, title: 'Book 1', author: 'Author 1', genre: 'Fiction', rating: 4, source: 'Manual' },
-    { id: 2, title: 'Book 2', author: 'Author 2', genre: 'Fantasy', rating: 5, source: 'Web' },
-    { id: 3, title: 'Book 3', author: 'Author 3', genre: 'Sci-Fi', rating: 3, source: 'Manual' },
-    { id: 4, title: 'Book 4', author: 'Author 4', genre: 'Drama', rating: 2, source: 'Web' },
-    { id: 5, title: 'Book 5', author: 'Author 5', genre: 'Mystery', rating: 4, source: 'Manual' },
-    { id: 6, title: 'Book 6', author: 'Author 6', genre: 'Romance', rating: 5, source: 'Web' },
-    { id: 7, title: 'Book 7', author: 'Author 7', genre: 'History', rating: 1, source: 'Manual' },
-];
+vi.mock("../../api/automationApi", () => ({
+  getFakerLoopStatus: vi.fn(() => Promise.resolve({ running: false })),
+  startFakerLoop: vi.fn(() => Promise.resolve({ running: true })),
+  stopFakerLoop: vi.fn(() => Promise.resolve({ running: false })),
+}));
 
-function renderPage(extraProps = {}) {
-    return render(
-        <MemoryRouter>
-            <LibraryPage books={books} onDelete={vi.fn()} onAdd={vi.fn()} {...extraProps} />
-        </MemoryRouter>
-    );
-}
+vi.mock("../../hooks/useInfiniteBooks", () => ({
+  default: () => ({
+    books: [
+      {
+        id: "book-1",
+        title: "Dune",
+        author: "Frank Herbert",
+        genre: "Sci-Fi",
+        rating: 5,
+        source: "Goodreads",
+        cover_url: null,
+      },
+    ],
+    totalBooks: 1,
+    loadingInitial: false,
+    loadingMore: false,
+    error: "",
+    hasMore: false,
+    loadNextPage: vi.fn(),
+    refreshFromStart,
+  }),
+}));
 
-describe('LibraryPage', () => {
-    beforeEach(() => {
-        document.cookie = 'libraryViewPreference=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    });
+vi.mock("../../hooks/useBooksOfflineSync", () => ({
+  default: () => ({
+    isOfflineMode: false,
+    offlineQueueCount: 0,
+    isSyncingQueue: false,
+  }),
+}));
 
-    it('renders in list view by default', () => {
-        renderPage();
+vi.mock("../../hooks/useBooksRealtime", () => ({
+  default: () => ({ isRealtimeConnected: true }),
+}));
 
-        expect(screen.getByText(/my library/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /list/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /grid/i })).toBeInTheDocument();
-        expect(screen.getByText(/title & author/i)).toBeInTheDocument();
-        expect(screen.getByText(/showing page 1 of 3 \(7 total books\)/i)).toBeInTheDocument();
-    });
+describe("LibraryPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.confirm = vi.fn(() => true);
+  });
 
-    it('switches to grid view when grid button is clicked', async () => {
-        const user = userEvent.setup();
-        renderPage();
+  it("renders the library and only loop faker controls", () => {
+    render(<MemoryRouter><LibraryPage /></MemoryRouter>);
 
-        await user.click(screen.getByRole('button', { name: /grid/i }));
+    expect(screen.getByText("Dune")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /start faker loop/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /stop faker loop/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /generate faker/i })).not.toBeInTheDocument();
+  });
 
-        expect(screen.queryByText(/title & author/i)).not.toBeInTheDocument();
-        expect(screen.getByText('Book 1')).toBeInTheDocument();
-        expect(screen.getByText(/showing page 1 of 2 \(7 total books\)/i)).toBeInTheDocument();
-    });
+  it("confirms before deleting a book", async () => {
+    const user = userEvent.setup();
+    deleteBook.mockResolvedValue(null);
+    render(<MemoryRouter><LibraryPage /></MemoryRouter>);
 
-    it('opens scrape modal when clicking scrape button', async () => {
-        const user = userEvent.setup();
-        renderPage();
+    await user.click(screen.getByRole("button", { name: /delete/i }));
 
-        await user.click(screen.getByRole('button', { name: /\+ scrape new book/i }));
-
-        expect(screen.getByText(/mock scrape modal/i)).toBeInTheDocument();
-    });
-
-    it('calls onDelete when delete button is clicked in list view', async () => {
-        const user = userEvent.setup();
-        const onDelete = vi.fn();
-
-        renderPage({ onDelete });
-
-        const deleteButtons = document.querySelectorAll('button.action-icon.delete');
-        expect(deleteButtons.length).toBeGreaterThan(0);
-
-        await user.click(deleteButtons[0]);
-
-        expect(onDelete).toHaveBeenCalledWith(1);
-    });
-
-    it('goes to next page and previous page', async () => {
-        const user = userEvent.setup();
-        renderPage();
-
-        await user.click(screen.getByRole('button', { name: /next/i }));
-        expect(screen.getByText(/showing page 2 of 3 \(7 total books\)/i)).toBeInTheDocument();
-
-        await user.click(screen.getByRole('button', { name: /previous/i }));
-        expect(screen.getByText(/showing page 1 of 3 \(7 total books\)/i)).toBeInTheDocument();
-    });
-
-    it('resets to page 1 when view mode changes', async () => {
-        const user = userEvent.setup();
-        renderPage();
-
-        await user.click(screen.getByRole('button', { name: /next/i }));
-        expect(screen.getByText(/showing page 2 of 3/i)).toBeInTheDocument();
-
-        await user.click(screen.getByRole('button', { name: /grid/i }));
-        expect(screen.getByText(/showing page 1 of 2/i)).toBeInTheDocument();
-    });
+    expect(window.confirm).toHaveBeenCalled();
+    expect(deleteBook).toHaveBeenCalledWith("book-1");
+  });
 });

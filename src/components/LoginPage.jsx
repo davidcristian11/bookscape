@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
 import { loginUser } from "../api/authApi";
@@ -15,7 +15,16 @@ export default function LoginPage() {
   });
 
   const [error, setError] = useState("");
+  const [validationError, setValidationError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const sessionMessage = window.sessionStorage.getItem("bookscape_session_message");
+    if (sessionMessage) {
+      setError(sessionMessage);
+      window.sessionStorage.removeItem("bookscape_session_message");
+    }
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -28,6 +37,17 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
+    setValidationError("");
+
+    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setValidationError("Enter a valid email address.");
+      return;
+    }
+
+    if (!form.password.trim()) {
+      setValidationError("Password is required.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -55,7 +75,7 @@ export default function LoginPage() {
     >
       <h2 className="form-title">Welcome Back</h2>
 
-      <form className="auth-form" onSubmit={handleLogin}>
+      <form className="auth-form" onSubmit={handleLogin} noValidate>
         <div className="input-group">
           <label>Email</label>
           <input
@@ -80,7 +100,17 @@ export default function LoginPage() {
           />
         </div>
 
-        {error && <p className="error-text">{error}</p>}
+        {validationError && (
+          <p className="error-text" role="alert">
+            {validationError}
+          </p>
+        )}
+
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
 
         <button type="submit" className="submit-btn" disabled={isSubmitting}>
           {isSubmitting ? "Logging in..." : "Log In"}

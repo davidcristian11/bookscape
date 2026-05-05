@@ -32,15 +32,30 @@ export default function InsightsPage() {
       setLoading(true);
       setError("");
 
-      const [bookStats, nextQuoteStats] = await Promise.all([
-        getStats(),
-        getQuoteStats(),
-      ]);
+      const bookStats = await getStats();
+      let nextQuoteStats = null;
+
+      try {
+        nextQuoteStats = await getQuoteStats();
+      } catch {
+        nextQuoteStats = {
+          total_quotes: 0,
+          quotes_by_book: {},
+          quotes_by_relationship: {},
+        };
+        if (!navigator.onLine) {
+          setError("Insights will refresh when you are back online.");
+        }
+      }
 
       setStats(bookStats);
       setQuoteStats(nextQuoteStats);
     } catch (err) {
-      setError(err.message || "Failed to load stats.");
+      setError(
+        !navigator.onLine
+          ? "Insights will refresh when you are back online."
+          : err.message || "Failed to load stats."
+      );
     } finally {
       setLoading(false);
     }
@@ -50,15 +65,18 @@ export default function InsightsPage() {
     isOfflineMode,
     offlineQueueCount,
     isSyncingQueue,
+    connectionMessage,
+    queueText,
   } = useBooksOfflineSync(loadAllStats);
 
-  const { isRealtimeConnected } = useBooksRealtime(
+  const { isRealtimeConnected, realtimeMessage } = useBooksRealtime(
     useCallback(
       (event) => {
         if (
           event.type === "book_created" ||
           event.type === "book_updated" ||
-          event.type === "book_deleted"
+          event.type === "book_deleted" ||
+          event.type === "ws_reconnected"
         ) {
           loadAllStats();
         }
@@ -83,14 +101,6 @@ export default function InsightsPage() {
     };
   }, [loadAllStats]);
 
-  const statusData = useMemo(() => {
-    if (!stats) return [];
-    return Object.entries(stats.books_by_status).map(([name, value]) => ({
-      name,
-      value,
-    }));
-  }, [stats]);
-
   const genreData = useMemo(() => {
     if (!stats) return [];
     return Object.entries(stats.books_by_genre).map(([name, value]) => ({
@@ -99,9 +109,25 @@ export default function InsightsPage() {
     }));
   }, [stats]);
 
-  const quoteTagData = useMemo(() => {
+  const sourceData = useMemo(() => {
+    if (!stats) return [];
+    return Object.entries(stats.books_by_source).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  }, [stats]);
+
+  const monthlyData = useMemo(() => {
+    if (!stats) return [];
+    return Object.entries(stats.books_by_month).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  }, [stats]);
+
+  const quoteRelationshipData = useMemo(() => {
     if (!quoteStats) return [];
-    return Object.entries(quoteStats.quotes_by_tag).map(([name, value]) => ({
+    return Object.entries(quoteStats.quotes_by_relationship).map(([name, value]) => ({
       name,
       value,
     }));
@@ -115,7 +141,7 @@ export default function InsightsPage() {
     );
   }
 
-  if (error) {
+  if (error && !stats) {
     return (
       <div className="library-container">
         <p className="error-text">{error}</p>
@@ -150,11 +176,22 @@ export default function InsightsPage() {
         <div>
           <h3 style={{ marginBottom: "0.5rem" }}>Realtime updates</h3>
           <p style={{ margin: 0, color: "var(--text-gray)" }}>
-            WebSocket status:{" "}
-            <strong>{isRealtimeConnected ? "Connected" : "Disconnected"}</strong>
+            <strong>{!navigator.onLine ? "Offline mode active" : connectionMessage}</strong>
+            {queueText ? ` - ${queueText}` : ""}
+          </p>
+          <p style={{ margin: "0.35rem 0 0 0", color: "var(--text-gray)" }}>
+            {navigator.onLine && isRealtimeConnected
+              ? realtimeMessage
+              : "Realtime updates disconnected, retrying..."}
           </p>
         </div>
       </div>
+
+      {error && (
+        <div className="review-card" style={{ marginBottom: "1.5rem" }}>
+          <p className="author-text" role="status">{error}</p>
+        </div>
+      )}
 
       {(isOfflineMode || offlineQueueCount > 0 || isSyncingQueue) && (
         <div
@@ -166,11 +203,7 @@ export default function InsightsPage() {
           }}
         >
           <h3 style={{ marginBottom: "0.75rem" }}>
-            {isSyncingQueue
-              ? "Synchronizing offline changes..."
-              : isOfflineMode
-              ? "Offline mode active"
-              : "Pending changes waiting to sync"}
+            {connectionMessage}
           </h3>
 
           <p style={{ margin: 0, color: "var(--text-gray)" }}>
@@ -180,7 +213,7 @@ export default function InsightsPage() {
           </p>
 
           <p style={{ margin: "0.75rem 0 0 0", fontWeight: "bold" }}>
-            Queued operations: {offlineQueueCount}
+            {queueText || `Queued operations: ${offlineQueueCount}`}
           </p>
         </div>
       )}
@@ -249,18 +282,18 @@ export default function InsightsPage() {
           }}
         >
           <div className="review-card">
-            <h3>Books by Status</h3>
+            <h3>Books by Source</h3>
             <div style={{ width: "100%", height: 320 }}>
               <ResponsiveContainer>
                 <PieChart>
                   <Pie
-                    data={statusData}
+                    data={sourceData}
                     dataKey="value"
                     nameKey="name"
                     outerRadius={100}
                     label
                   >
-                    {statusData.map((entry, index) => (
+                    {sourceData.map((entry, index) => (
                       <Cell
                         key={entry.name}
                         fill={PIE_COLORS[index % PIE_COLORS.length]}
@@ -291,15 +324,31 @@ export default function InsightsPage() {
           </div>
 
           <div className="review-card">
-            <h3>Quote Cards by Tag</h3>
-            {quoteTagData.length === 0 ? (
+            <h3>Books by Month</h3>
+            <div style={{ width: "100%", height: 320 }}>
+              <ResponsiveContainer>
+                <BarChart data={monthlyData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" angle={-20} textAnchor="end" height={70} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="value" name="Books" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="review-card">
+            <h3>Quote Cards by Relationship</h3>
+            {quoteRelationshipData.length === 0 ? (
               <p style={{ color: "var(--text-gray)" }}>
-                No tagged quote cards yet.
+                No connected quote cards yet.
               </p>
             ) : (
               <div style={{ width: "100%", height: 320 }}>
                 <ResponsiveContainer>
-                  <BarChart data={quoteTagData}>
+                  <BarChart data={quoteRelationshipData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-20} textAnchor="end" height={70} />
                     <YAxis allowDecimals={false} />

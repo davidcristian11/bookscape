@@ -15,6 +15,7 @@ export default function RegisterPage() {
   });
 
   const [error, setError] = useState("");
+  const [validationErrors, setValidationErrors] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (event) => {
@@ -28,6 +29,25 @@ export default function RegisterPage() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError("");
+    setValidationErrors([]);
+
+    const nextValidationErrors = [];
+    if (form.name.trim().length < 2) {
+      nextValidationErrors.push("Name must contain at least 2 characters.");
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      nextValidationErrors.push("Enter a valid email address.");
+    }
+
+    if (form.password.length < 4) {
+      nextValidationErrors.push("Password must contain at least 4 characters.");
+    }
+
+    if (nextValidationErrors.length > 0) {
+      setValidationErrors(nextValidationErrors);
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -54,7 +74,7 @@ export default function RegisterPage() {
     >
       <h2 className="form-title">Create Your Account</h2>
 
-      <form className="auth-form" onSubmit={handleRegister}>
+      <form className="auth-form" onSubmit={handleRegister} noValidate>
         <div className="input-group">
           <label>Name</label>
           <input
@@ -91,7 +111,19 @@ export default function RegisterPage() {
           />
         </div>
 
-        {error && <p className="error-text">{error}</p>}
+        {validationErrors.length > 0 && (
+          <div className="error-text" role="alert">
+            {validationErrors.map((message) => (
+              <p key={message}>{message}</p>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
 
         <button type="submit" className="submit-btn" disabled={isSubmitting}>
           {isSubmitting ? "Registering..." : "Register"}

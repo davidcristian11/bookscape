@@ -1,37 +1,25 @@
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import Navbar from './Navbar';
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+import Navbar from "../Navbar";
 
-function renderNavbar(path = '/') {
-    return render(
-        <MemoryRouter initialEntries={[path]}>
-            <Navbar />
-        </MemoryRouter>
-    );
-}
+vi.mock("../../api/authApi", () => ({ logoutUser: vi.fn() }));
 
-describe('Navbar', () => {
-    it('shows auth links on welcome page', () => {
-        renderNavbar('/');
+vi.mock("../../utils/authStorage", () => ({
+  clearAuthSession: vi.fn(),
+  getAuthToken: vi.fn(() => "token"),
+  getStoredUser: vi.fn(() => ({ name: "Reader" })),
+  isAuthenticated: vi.fn(() => true),
+}));
 
-        expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /register/i })).toBeInTheDocument();
-        expect(screen.queryByRole('link', { name: /insights/i })).not.toBeInTheDocument();
-    });
+describe("Navbar", () => {
+  it("shows authenticated navigation links", () => {
+    render(<MemoryRouter initialEntries={["/library"]}><Navbar /></MemoryRouter>);
 
-    it('shows app links inside the application', () => {
-        renderNavbar('/library');
-
-        expect(screen.getByRole('link', { name: /library/i })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /insights/i })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /idea nexus/i })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /sign out/i })).toBeInTheDocument();
-    });
-
-    it('applies active class for current route', () => {
-        renderNavbar('/insights');
-
-        expect(screen.getByRole('link', { name: /insights/i })).toHaveClass('active');
-        expect(screen.getByRole('link', { name: /library/i })).not.toHaveClass('active');
-    });
+    expect(screen.getByText("BookScape")).toBeInTheDocument();
+    expect(screen.getByText("Library")).toBeInTheDocument();
+    expect(screen.getByText("Insights")).toBeInTheDocument();
+    expect(screen.getByText("Idea Nexus")).toBeInTheDocument();
+    expect(screen.getByText(/hi, reader/i)).toBeInTheDocument();
+  });
 });

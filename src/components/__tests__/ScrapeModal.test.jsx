@@ -1,48 +1,38 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import ScrapeModal from '../ScrapeModal';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import ScrapeModal from "../ScrapeModal";
 
-describe('ScrapeModal Component', () => {
+const scrapeBook = vi.fn();
 
-    it('nu randează nimic dacă isOpen este false', () => {
-        const { container } = render(<ScrapeModal isOpen={false} />);
-        // Dacă isOpen e false, componenta ar trebui să returneze null (nimic)
-        expect(container.firstChild).toBeNull();
-    });
+vi.mock("../../api/booksApi", () => ({
+  scrapeBook: (...args) => scrapeBook(...args),
+}));
 
-    it('afișează eroare dacă se apasă submit fără URL valid', () => {
-        render(<ScrapeModal isOpen={true} onClose={() => {}} onAddBook={() => {}} />);
+describe("ScrapeModal", () => {
+  it("validates scrape URL before calling the backend", async () => {
+    const user = userEvent.setup();
+    render(<ScrapeModal isOpen onClose={vi.fn()} onAddBook={vi.fn()} />);
 
-        const submitButton = screen.getByText('Scrape Book');
-        fireEvent.click(submitButton); // Simulăm click-ul
+    await user.type(screen.getByPlaceholderText(/goodreads/i), "not-a-url");
+    await user.click(screen.getByRole("button", { name: /start scraping now/i }));
 
-        // Ar trebui să apară mesajul de eroare din validarea ta
-        expect(screen.getByText('Please enter a valid URL.')).toBeDefined();
-    });
+    expect(screen.getByText(/valid http or https/i)).toBeInTheDocument();
+    expect(scrapeBook).not.toHaveBeenCalled();
+  });
 
-    it('apelează funcția onAddBook cu date valide și se închide', () => {
-        // vi.fn() creează o funcție "spion" (spy) ca să vedem dacă a fost apelată
-        const mockOnAddBook = vi.fn();
-        const mockOnClose = vi.fn();
+  it("submits supported scrape URLs", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    scrapeBook.mockResolvedValue({ id: "book-1" });
+    render(<ScrapeModal isOpen onClose={onClose} onAddBook={vi.fn()} />);
 
-        render(
-            <ScrapeModal
-                isOpen={true}
-                onClose={mockOnClose}
-                onAddBook={mockOnAddBook}
-            />
-        );
+    await user.type(
+      screen.getByPlaceholderText(/goodreads/i),
+      "https://www.goodreads.com/book/show/1"
+    );
+    await user.click(screen.getByRole("button", { name: /start scraping now/i }));
 
-        // 1. Găsim input-ul și scriem un link în el
-        const input = screen.getByRole('textbox');
-        fireEvent.change(input, { target: { value: 'https://www.goodreads.com/book/123' } });
-
-        // 2. Găsim și apăsăm butonul
-        const submitButton = screen.getByText('Scrape Book');
-        fireEvent.click(submitButton);
-
-        // 3. Verificăm (Assert) că funcțiile "spion" au fost apelate
-        expect(mockOnAddBook).toHaveBeenCalled(); // Cartea a fost trimisă spre App.jsx?
-        expect(mockOnClose).toHaveBeenCalled();   // Modalul a cerut să fie închis?
-    });
+    expect(scrapeBook).toHaveBeenCalledWith("https://www.goodreads.com/book/show/1");
+  });
 });

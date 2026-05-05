@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import ScrapeModal from "./ScrapeModal";
 import { deleteBook, createBook } from "../api/booksApi";
-import { startFakerLoop, stopFakerLoop } from "../api/automationApi";
-import { getStarterBooks } from "../utils/demoBooks";
-import { buildFakeBooks } from "../utils/fakerBooks";
+import { getFakerLoopStatus, startFakerLoop, stopFakerLoop } from "../api/automationApi";
 import useBooksOfflineSync from "../hooks/useBooksOfflineSync";
 import useBooksRealtime from "../hooks/useBooksRealtime";
 import useInfiniteBooks from "../hooks/useInfiniteBooks";
@@ -24,16 +22,15 @@ const getCookie = (name) => {
 };
 
 function renderStars(rating) {
-  return "★".repeat(rating) + "☆".repeat(5 - rating);
+  return "*".repeat(rating) + "-".repeat(5 - rating);
 }
 
 export default function LibraryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState(
-    getCookie("libraryViewPreference") || "list"
+    getCookie("bookscape_view_mode") || getCookie("libraryViewPreference") || "list"
   );
 
-  const [bulkLoading, setBulkLoading] = useState(false);
   const [automationLoading, setAutomationLoading] = useState(false);
   const [isFakerRunning, setIsFakerRunning] = useState(false);
 
@@ -56,15 +53,18 @@ export default function LibraryPage() {
     isOfflineMode,
     offlineQueueCount,
     isSyncingQueue,
+    connectionMessage,
+    queueText,
   } = useBooksOfflineSync(refreshFromStart);
 
-  const { isRealtimeConnected } = useBooksRealtime(
+  const { isRealtimeConnected, realtimeMessage } = useBooksRealtime(
     useCallback(
       (event) => {
         if (
           event.type === "book_created" ||
           event.type === "book_updated" ||
-          event.type === "book_deleted"
+          event.type === "book_deleted" ||
+          event.type === "ws_reconnected"
         ) {
           refreshFromStart();
         }
@@ -80,6 +80,12 @@ export default function LibraryPage() {
       [refreshFromStart]
     )
   );
+
+  useEffect(() => {
+    getFakerLoopStatus()
+      .then((status) => setIsFakerRunning(status.running))
+      .catch(() => setIsFakerRunning(false));
+  }, []);
 
   useEffect(() => {
     const sentinel = loadMoreTriggerRef.current;
@@ -113,10 +119,15 @@ export default function LibraryPage() {
 
   const handleViewChange = (mode) => {
     setViewMode(mode);
-    setCookie("libraryViewPreference", mode, 7);
+    setCookie("bookscape_view_mode", mode, 30);
+    setCookie("bookscape_page_size", mode === "grid" ? "6" : "3", 30);
   };
 
   const handleDeleteBook = async (id) => {
+    if (!window.confirm("Delete this book and its quote cards?")) {
+      return;
+    }
+
     try {
       await deleteBook(id);
       await refreshFromStart();
@@ -130,52 +141,44 @@ export default function LibraryPage() {
     await refreshFromStart();
   };
 
-  const handleAddMultipleBooks = async (bookPayloads) => {
-    try {
-      setBulkLoading(true);
-
-      await Promise.all(bookPayloads.map((payload) => createBook(payload)));
-      await refreshFromStart();
-    } catch (err) {
-      alert(err.message || "Failed to create demo books.");
-    } finally {
-      setBulkLoading(false);
-    }
-  };
-
-  const handleLoadStarterBooks = async () => {
-    await handleAddMultipleBooks(getStarterBooks());
-  };
-
-  const handleGenerateFakerBooks = async () => {
-    await handleAddMultipleBooks(buildFakeBooks(5));
-  };
-
-  const handleStartFakerLoop = async () => {
+  const handleToggleFakerLoop = async () => {
     try {
       setAutomationLoading(true);
-      await startFakerLoop(2);
-      setIsFakerRunning(true);
+      if (isFakerRunning) {
+        await stopFakerLoop();
+        setIsFakerRunning(false);
+      } else {
+        await startFakerLoop(2);
+        setIsFakerRunning(true);
+      }
     } catch (err) {
-      alert(err.message || "Failed to start faker loop.");
-    } finally {
-      setAutomationLoading(false);
-    }
-  };
-
-  const handleStopFakerLoop = async () => {
-    try {
-      setAutomationLoading(true);
-      await stopFakerLoop();
-      setIsFakerRunning(false);
-    } catch (err) {
-      alert(err.message || "Failed to stop faker loop.");
+      alert(err.message || "Failed to update faker loop.");
     } finally {
       setAutomationLoading(false);
     }
   };
 
   const showEmptyState = !loadingInitial && !error && books.length === 0;
+  const realtimeNeedsAttention = navigator.onLine && !isRealtimeConnected;
+  const messageNeedsAttention = [
+    "Offline mode active",
+    "Server unreachable",
+    "Syncing...",
+    "Sync failed",
+    "Synced successfully",
+  ].includes(connectionMessage) || (connectionMessage || "").includes("server session expired");
+  const showConnectionBanner =
+    !navigator.onLine ||
+    isOfflineMode ||
+    offlineQueueCount > 0 ||
+    isSyncingQueue ||
+    messageNeedsAttention ||
+    realtimeNeedsAttention;
+  const fakerButtonLabel = automationLoading
+    ? "Working..."
+    : isFakerRunning
+      ? "Stop Faker Loop"
+      : "Start Faker Loop";
 
   return (
     <div className="library-container">
@@ -199,38 +202,11 @@ export default function LibraryPage() {
           </div>
 
           <button
-            className="scrape-btn"
-            onClick={handleLoadStarterBooks}
-            disabled={bulkLoading}
-          >
-            {bulkLoading ? "Loading..." : "Load Starter Books"}
-          </button>
-
-          <button
-            className="scrape-btn"
-            onClick={handleGenerateFakerBooks}
-            disabled={bulkLoading}
-            style={{ backgroundColor: "#4f46e5" }}
-          >
-            {bulkLoading ? "Generating..." : "Generate Faker Books"}
-          </button>
-
-          <button
-            className="scrape-btn"
-            onClick={handleStartFakerLoop}
+            className={`scrape-btn faker-toggle-btn ${isFakerRunning ? "danger" : ""}`}
+            onClick={handleToggleFakerLoop}
             disabled={automationLoading}
-            style={{ backgroundColor: "#0ea5e9" }}
           >
-            {automationLoading ? "Working..." : "Start Faker Loop"}
-          </button>
-
-          <button
-            className="scrape-btn"
-            onClick={handleStopFakerLoop}
-            disabled={automationLoading}
-            style={{ backgroundColor: "#ef4444" }}
-          >
-            {automationLoading ? "Working..." : "Stop Faker Loop"}
+            {fakerButtonLabel}
           </button>
 
           <button
@@ -242,59 +218,40 @@ export default function LibraryPage() {
         </div>
       </header>
 
-      <div
-        className="review-card"
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h3 style={{ marginBottom: "0.5rem" }}>Realtime updates</h3>
-          <p style={{ margin: 0, color: "var(--text-gray)" }}>
-            WebSocket status:{" "}
-            <strong>{isRealtimeConnected ? "Connected" : "Disconnected"}</strong>
-          </p>
-        </div>
-
-        <div>
-          <h3 style={{ marginBottom: "0.5rem" }}>Faker automation</h3>
-          <p style={{ margin: 0, color: "var(--text-gray)" }}>
-            Loop status:{" "}
-            <strong>{isFakerRunning ? "Running" : "Stopped"}</strong>
-          </p>
-        </div>
-      </div>
-
-      {(isOfflineMode || offlineQueueCount > 0 || isSyncingQueue) && (
+      {showConnectionBanner && (
         <div
-          className="review-card"
-          style={{
-            marginBottom: "1.5rem",
-            background: "#fff7ed",
-            border: "1px solid #fdba74",
-          }}
+          className={`review-card connection-banner ${isSyncingQueue ? "syncing" : ""}`}
+          role="status"
         >
           <h3 style={{ marginBottom: "0.75rem" }}>
-            {isSyncingQueue
-              ? "Synchronizing offline changes..."
-              : isOfflineMode
+            {!navigator.onLine
               ? "Offline mode active"
-              : "Pending changes waiting to sync"}
+              : realtimeNeedsAttention
+                ? "Realtime updates disconnected, retrying..."
+                : offlineQueueCount > 0
+                  ? queueText || `${offlineQueueCount} changes queued`
+                  : connectionMessage}
           </h3>
 
           <p style={{ margin: 0, color: "var(--text-gray)" }}>
-            {isOfflineMode
-              ? "The network or server is unavailable. CRUD actions are stored locally and will sync when the connection comes back."
-              : "The app is online again and queued changes are being synchronized."}
+            {!navigator.onLine || isOfflineMode
+              ? "CRUD actions are stored locally and will sync when the connection comes back."
+              : realtimeNeedsAttention
+                ? realtimeMessage || "Live updates are reconnecting in the background."
+                : connectionMessage.includes("server session expired")
+                  ? "Your offline queue is preserved. Log in or register again when ready, then BookScape will retry syncing."
+                : connectionMessage === "Synced successfully"
+                  ? "Your queued changes are now reflected in the library."
+                : isSyncingQueue
+                  ? "The app is online again and queued changes are being synchronized."
+                  : "Queued changes will sync automatically when the server is reachable."}
           </p>
 
-          <p style={{ margin: "0.75rem 0 0 0", fontWeight: "bold" }}>
-            Queued operations: {offlineQueueCount}
-          </p>
+          {(queueText || offlineQueueCount > 0) && (
+            <p style={{ margin: "0.75rem 0 0 0", fontWeight: "bold" }}>
+              {queueText || `Queued operations: ${offlineQueueCount}`}
+            </p>
+          )}
         </div>
       )}
 
@@ -305,35 +262,16 @@ export default function LibraryPage() {
         <div className="review-card">
           <h3>Your library is empty</h3>
           <p style={{ marginBottom: "1.5rem", color: "var(--text-gray)" }}>
-            Start by adding your 3 starter books, generate random demo books with
-            Faker, start the backend faker loop, or add one manually.
+            Start the backend Faker loop to watch live books arrive, or add and scrape one manually.
           </p>
 
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
             <button
               className="scrape-submit-btn"
-              onClick={handleLoadStarterBooks}
-              disabled={bulkLoading}
-            >
-              Load 3 Starter Books
-            </button>
-
-            <button
-              className="scrape-submit-btn"
-              onClick={handleGenerateFakerBooks}
-              disabled={bulkLoading}
-              style={{ backgroundColor: "#4f46e5" }}
-            >
-              Generate 5 Faker Books
-            </button>
-
-            <button
-              className="scrape-submit-btn"
-              onClick={handleStartFakerLoop}
+              onClick={handleToggleFakerLoop}
               disabled={automationLoading}
-              style={{ backgroundColor: "#0ea5e9" }}
             >
-              Start Faker Loop
+              {fakerButtonLabel}
             </button>
 
             <button
@@ -355,7 +293,7 @@ export default function LibraryPage() {
                 <th>Title & Author</th>
                 <th>Genre</th>
                 <th>Rating</th>
-                <th>Status</th>
+                <th>Source</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -384,7 +322,7 @@ export default function LibraryPage() {
                     <strong>{book.title}</strong>
                     <p className="author-text">
                       {book.author}
-                      {book._offline ? " • pending sync" : ""}
+                      {book._offline ? " - pending sync" : ""}
                     </p>
                   </td>
 
@@ -394,7 +332,7 @@ export default function LibraryPage() {
 
                   <td className="rating-stars">{renderStars(book.rating)}</td>
 
-                  <td className="source-text">{book.status}</td>
+                  <td className="source-text">{book.source}</td>
 
                   <td className="actions-cell">
                     <Link
@@ -402,14 +340,14 @@ export default function LibraryPage() {
                       className="action-icon"
                       title="View details"
                     >
-                      👁️
+                      View
                     </Link>
                     <button
                       onClick={() => handleDeleteBook(book.id)}
                       className="action-icon delete"
                       title="Delete book"
                     >
-                      🗑️
+                      Delete
                     </button>
                   </td>
                 </tr>
@@ -438,10 +376,10 @@ export default function LibraryPage() {
                 <strong>{book.title}</strong>
                 <p className="author-text">
                   {book.author}
-                  {book._offline ? " • pending sync" : ""}
+                  {book._offline ? " - pending sync" : ""}
                 </p>
                 <p className="author-text">
-                  {book.genre} • {book.status}
+                  {book.genre} - {book.source}
                 </p>
 
                 <div className="grid-card-footer">
@@ -488,7 +426,10 @@ export default function LibraryPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAddBook={handleAddBook}
+        onBookCreated={refreshFromStart}
       />
     </div>
   );
 }
+
+

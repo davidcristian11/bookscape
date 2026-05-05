@@ -1,4 +1,4 @@
-import { clearAuthSession, getAuthToken } from "../utils/authStorage";
+import { getAuthToken } from "../utils/authStorage";
 import {
   computeLocalBookStats,
   getLocalBookById,
@@ -25,6 +25,16 @@ class ApiUnavailableError extends Error {
     super(message);
     this.name = "ApiUnavailableError";
     this.isUnavailable = true;
+  }
+}
+
+class AuthSessionExpiredError extends Error {
+  constructor(
+    message = "Your in-memory server session expired after the backend restart. Please log in again to sync your offline changes."
+  ) {
+    super(message);
+    this.name = "AuthSessionExpiredError";
+    this.isAuthExpired = true;
   }
 }
 
@@ -62,21 +72,34 @@ function generateTemporaryId() {
 }
 
 function buildTemporaryBook(payload) {
+  const now = new Date().toISOString();
+  const temporaryId = generateTemporaryId();
   return {
-    id: generateTemporaryId(),
+    id: temporaryId,
     title: payload.title,
     author: payload.author,
     genre: payload.genre,
-    year: payload.year,
-    status: payload.status,
+    publication_year: payload.publication_year,
+    source: payload.source ?? "Manual",
+    source_url: payload.source_url ?? null,
+    synopsis: payload.synopsis ?? "",
+    review: payload.review ?? "",
     rating: payload.rating,
     cover_url: payload.cover_url ?? null,
+    created_at: now,
+    updated_at: now,
     _offline: true,
+    _syncStatus: "pending",
+    _clientMutationId: temporaryId,
   };
 }
 
 export function isApiUnavailableError(error) {
   return Boolean(error?.isUnavailable);
+}
+
+export function isAuthSessionExpiredError(error) {
+  return Boolean(error?.isAuthExpired);
 }
 
 async function requestWithAuth(path, options = {}) {
@@ -102,10 +125,8 @@ async function requestWithAuth(path, options = {}) {
       ...fetchOptions,
     });
 
-    if (response.status === 401) {
-      clearAuthSession();
-      window.location.href = "/login";
-      throw new Error("Session expired. Please log in again.");
+    if (response.status === 401 || response.status === 403) {
+      throw new AuthSessionExpiredError();
     }
 
     if ([502, 503, 504].includes(response.status)) {
@@ -124,7 +145,11 @@ async function requestWithAuth(path, options = {}) {
     }
 
     if (!response.ok) {
-      throw new Error(extractErrorMessage(data));
+      const message = extractErrorMessage(data);
+      if (/invalid|expired|unauthorized|forbidden/i.test(message)) {
+        throw new AuthSessionExpiredError();
+      }
+      throw new Error(message);
     }
 
     return data;
@@ -167,6 +192,8 @@ export async function checkBooksServerAvailability() {
 
 export { getOfflineQueueCount };
 
+let activeSyncPromise = null;
+
 export async function getBooks(page = 1, pageSize = 10) {
   try {
     const params = new URLSearchParams({
@@ -181,7 +208,7 @@ export async function getBooks(page = 1, pageSize = 10) {
     mergeLocalBooks(data.items);
     return data;
   } catch (error) {
-    if (!isApiUnavailableError(error)) {
+    if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
       throw error;
     }
 
@@ -198,7 +225,7 @@ export async function getBookById(id) {
     upsertLocalBook(data);
     return data;
   } catch (error) {
-    if (!isApiUnavailableError(error)) {
+    if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
       throw error;
     }
 
@@ -222,7 +249,7 @@ export async function createBook(payload) {
     upsertLocalBook(createdBook);
     return createdBook;
   } catch (error) {
-    if (!isApiUnavailableError(error)) {
+    if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
       throw error;
     }
 
@@ -245,7 +272,7 @@ export async function updateBook(id, payload) {
     upsertLocalBook(updatedBook);
     return updatedBook;
   } catch (error) {
-    if (!isApiUnavailableError(error)) {
+    if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
       throw error;
     }
 
@@ -281,7 +308,7 @@ export async function deleteBook(id) {
     removeLocalBook(id);
     return null;
   } catch (error) {
-    if (!isApiUnavailableError(error)) {
+    if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
       throw error;
     }
 
@@ -298,7 +325,7 @@ export async function getStats() {
       method: "GET",
     });
   } catch (error) {
-    if (!isApiUnavailableError(error)) {
+    if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
       throw error;
     }
 
@@ -306,7 +333,7 @@ export async function getStats() {
   }
 }
 
-export async function syncQueuedBookOperations() {
+async function syncQueuedBookOperationsOnce() {
   const queue = [...getOfflineQueue()];
 
   if (queue.length === 0) {
@@ -318,6 +345,15 @@ export async function syncQueuedBookOperations() {
   if (!serverAvailable) {
     return { synced: false, count: queue.length };
   }
+
+  const syncBatchId = `sync-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  setOfflineQueue(
+    queue.map((operation) => ({
+      ...operation,
+      status: "in-flight",
+      syncBatchId,
+    }))
+  );
 
   const idMap = new Map();
 
@@ -332,7 +368,10 @@ export async function syncQueuedBookOperations() {
         });
 
         removeLocalBook(operation.tempId);
-        upsertLocalBook(createdBook);
+        upsertLocalBook({
+          ...createdBook,
+          _clientMutationId: operation.tempId,
+        });
         idMap.set(operation.tempId, createdBook.id);
         continue;
       }
@@ -373,8 +412,50 @@ export async function syncQueuedBookOperations() {
         }
       }
     } catch (error) {
+      if (isAuthSessionExpiredError(error)) {
+        setOfflineQueue(
+          queue.slice(index).map((pendingOperation) => ({
+            ...pendingOperation,
+            status: "paused-auth",
+            syncBatchId: undefined,
+          }))
+        );
+        if (operation.type === "create") {
+          const pendingBook = getLocalBookById(operation.tempId);
+          if (pendingBook) {
+            upsertLocalBook({
+              ...pendingBook,
+              _offline: true,
+              _syncStatus: "auth-required",
+            });
+          }
+        }
+        return {
+          synced: false,
+          count: queue.length - index,
+          authExpired: true,
+          message: error.message,
+        };
+      }
+
       if (isApiUnavailableError(error)) {
-        setOfflineQueue(queue.slice(index));
+        setOfflineQueue(
+          queue.slice(index).map((pendingOperation) => ({
+            ...pendingOperation,
+            status: "pending",
+            syncBatchId: undefined,
+          }))
+        );
+        if (operation.type === "create") {
+          const pendingBook = getLocalBookById(operation.tempId);
+          if (pendingBook) {
+            upsertLocalBook({
+              ...pendingBook,
+              _offline: true,
+              _syncStatus: "failed",
+            });
+          }
+        }
         return {
           synced: false,
           count: queue.length - index,
@@ -393,4 +474,61 @@ export async function syncQueuedBookOperations() {
 
   clearOfflineQueue();
   return { synced: true, count: 0 };
+}
+
+export async function syncQueuedBookOperations() {
+  if (activeSyncPromise) {
+    return activeSyncPromise;
+  }
+
+  activeSyncPromise = syncQueuedBookOperationsOnce().finally(() => {
+    activeSyncPromise = null;
+  });
+
+  return activeSyncPromise;
+}
+
+export async function scrapeBook(url) {
+  try {
+    const createdBook = await requestWithAuth("/books/scrape", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+
+    upsertLocalBook(createdBook);
+    return createdBook;
+  } catch (error) {
+    if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
+      throw error;
+    }
+
+    const temporaryBook = buildTemporaryBook({
+      title: "Offline scraped book",
+      author: "Pending scraper",
+      genre: "Discovered",
+      publication_year: new Date().getFullYear(),
+      source: "Manual",
+      source_url: url,
+      synopsis: "This scrape request was queued while BookScape was offline.",
+      review: "",
+      rating: 0,
+      cover_url: null,
+    });
+
+    upsertLocalBook(temporaryBook);
+    enqueueCreateOperation(temporaryBook.id, {
+      title: temporaryBook.title,
+      author: temporaryBook.author,
+      genre: temporaryBook.genre,
+      publication_year: temporaryBook.publication_year,
+      source: temporaryBook.source,
+      source_url: temporaryBook.source_url,
+      synopsis: temporaryBook.synopsis,
+      review: temporaryBook.review,
+      rating: temporaryBook.rating,
+      cover_url: temporaryBook.cover_url,
+    });
+
+    return temporaryBook;
+  }
 }

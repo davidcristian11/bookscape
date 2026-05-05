@@ -74,3 +74,9 @@ export async function stopFakerLoop() {
     method: "POST",
   });
 }
+
+export async function getFakerLoopStatus() {
+  return request("/automation/faker/status", {
+    method: "GET",
+  });
+}

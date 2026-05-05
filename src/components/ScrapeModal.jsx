@@ -1,98 +1,129 @@
 import { useEffect, useState } from "react";
+import { scrapeBook } from "../api/booksApi";
 import "./Library.css";
 
+const currentYear = new Date().getFullYear();
+
 const initialForm = {
+  scrapeUrl: "",
   title: "",
   author: "",
   genre: "",
-  year: "",
-  status: "to-read",
+  publication_year: currentYear,
+  source: "Manual",
+  source_url: "",
+  synopsis: "",
+  review: "",
   rating: 0,
   cover_url: "",
 };
 
-export default function ScrapeModal({ isOpen, onClose, onAddBook }) {
+function validateUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export default function ScrapeModal({ isOpen, onClose, onAddBook, onBookCreated }) {
+  const [mode, setMode] = useState("scrape");
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
+      setMode("scrape");
       setForm(initialForm);
       setErrors({});
       setSubmitError("");
+      setSuccessMessage("");
       setIsSubmitting(false);
     }
   }, [isOpen]);
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
-  const validate = () => {
+  const validateManualBook = () => {
     const nextErrors = {};
+    const yearNumber = Number(form.publication_year);
+    const ratingNumber = Number(form.rating);
 
     if (!form.title.trim()) nextErrors.title = "Title is required.";
     if (!form.author.trim()) nextErrors.author = "Author is required.";
     if (!form.genre.trim()) nextErrors.genre = "Genre is required.";
-
-    const yearNumber = Number(form.year);
-    if (!form.year || Number.isNaN(yearNumber) || yearNumber < 0) {
-      nextErrors.year = "Year must be a valid non-negative number.";
+    if (!yearNumber || yearNumber < 0 || yearNumber > currentYear) {
+      nextErrors.publication_year = `Publication year must be between 0 and ${currentYear}.`;
     }
-
-    const ratingNumber = Number(form.rating);
-    if (
-      Number.isNaN(ratingNumber) ||
-      ratingNumber < 0 ||
-      ratingNumber > 5
-    ) {
+    if (Number.isNaN(ratingNumber) || ratingNumber < 0 || ratingNumber > 5) {
       nextErrors.rating = "Rating must be between 0 and 5.";
     }
-
-    if (
-      form.cover_url.trim() &&
-      !/^https?:\/\/.+/i.test(form.cover_url.trim())
-    ) {
-      nextErrors.cover_url = "Cover URL must start with http:// or https://";
+    for (const key of ["source_url", "cover_url"]) {
+      if (form[key].trim() && !/^https?:\/\/.+/i.test(form[key].trim())) {
+        nextErrors[key] = "URL must start with http:// or https://";
+      }
     }
 
     return nextErrors;
   };
 
+  const validateScrape = () => {
+    if (!validateUrl(form.scrapeUrl.trim())) {
+      return {
+        scrapeUrl:
+          "Enter a valid http or https book page URL.",
+      };
+    }
+    return {};
+  };
+
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
-    const nextErrors = validate();
+    const nextErrors = mode === "scrape" ? validateScrape() : validateManualBook();
     setErrors(nextErrors);
     setSubmitError("");
+    setSuccessMessage("");
 
-    if (Object.keys(nextErrors).length > 0) {
-      return;
-    }
+    if (Object.keys(nextErrors).length > 0) return;
 
     try {
       setIsSubmitting(true);
 
-      await onAddBook({
-        title: form.title.trim(),
-        author: form.author.trim(),
-        genre: form.genre.trim(),
-        year: Number(form.year),
-        status: form.status,
-        rating: Number(form.rating),
-        cover_url: form.cover_url.trim() || null,
-      });
+      if (mode === "scrape") {
+        await scrapeBook(form.scrapeUrl.trim());
+      } else {
+        await onAddBook({
+          title: form.title.trim(),
+          author: form.author.trim(),
+          genre: form.genre.trim(),
+          publication_year: Number(form.publication_year),
+          source: form.source.trim() || "Manual",
+          source_url: form.source_url.trim() || null,
+          synopsis: form.synopsis.trim(),
+          review: form.review.trim(),
+          rating: Number(form.rating),
+          cover_url: form.cover_url.trim() || null,
+        });
+      }
 
+      if (typeof onBookCreated === "function") {
+        await onBookCreated();
+      }
+
+      setSuccessMessage(
+        mode === "scrape"
+          ? "Book metadata captured and added to your library."
+          : "Book added to your library."
+      );
       onClose();
     } catch (err) {
       setSubmitError(err.message || "Failed to create book.");
@@ -105,109 +136,83 @@ export default function ScrapeModal({ isOpen, onClose, onAddBook }) {
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h2>Add New Book</h2>
-          <button className="close-btn" onClick={onClose}>
-            ×
+          <h2>{mode === "scrape" ? "Scrape Book Data" : "Add Book Manually"}</h2>
+          <button className="close-btn" onClick={onClose} type="button">
+            x
+          </button>
+        </div>
+
+        <div className="view-toggle" style={{ margin: "0 1.5rem 1rem" }}>
+          <button
+            type="button"
+            className={`toggle-btn ${mode === "scrape" ? "active" : ""}`}
+            onClick={() => setMode("scrape")}
+          >
+            Scrape URL
+          </button>
+          <button
+            type="button"
+            className={`toggle-btn ${mode === "manual" ? "active" : ""}`}
+            onClick={() => setMode("manual")}
+          >
+            Manual
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <input
-              name="title"
-              placeholder="Title"
-              value={form.title}
-              onChange={handleChange}
-              className={errors.title ? "input-error" : ""}
-            />
-            {errors.title && <p className="error-text">{errors.title}</p>}
-
-            <input
-              name="author"
-              placeholder="Author"
-              value={form.author}
-              onChange={handleChange}
-              className={errors.author ? "input-error" : ""}
-            />
-            {errors.author && <p className="error-text">{errors.author}</p>}
-
-            <input
-              name="genre"
-              placeholder="Genre"
-              value={form.genre}
-              onChange={handleChange}
-              className={errors.genre ? "input-error" : ""}
-            />
-            {errors.genre && <p className="error-text">{errors.genre}</p>}
-
-            <input
-              name="year"
-              type="number"
-              placeholder="Year"
-              value={form.year}
-              onChange={handleChange}
-              className={errors.year ? "input-error" : ""}
-            />
-            {errors.year && <p className="error-text">{errors.year}</p>}
-
-            <select
-              name="status"
-              value={form.status}
-              onChange={handleChange}
-              style={{
-                padding: "0.8rem",
-                border: "1px solid var(--border-color)",
-                borderRadius: "4px",
-                fontSize: "1rem",
-              }}
-            >
-              <option value="to-read">to-read</option>
-              <option value="reading">reading</option>
-              <option value="finished">finished</option>
-            </select>
-
-            <input
-              name="rating"
-              type="number"
-              min="0"
-              max="5"
-              placeholder="Rating (0-5)"
-              value={form.rating}
-              onChange={handleChange}
-              className={errors.rating ? "input-error" : ""}
-            />
-            {errors.rating && <p className="error-text">{errors.rating}</p>}
-
-            <input
-              name="cover_url"
-              placeholder="Cover URL (optional)"
-              value={form.cover_url}
-              onChange={handleChange}
-              className={errors.cover_url ? "input-error" : ""}
-            />
-            {errors.cover_url && (
-              <p className="error-text">{errors.cover_url}</p>
+            {mode === "scrape" ? (
+              <>
+                <p className="author-text">
+                  Supported sources: Goodreads, Amazon, Barnes & Noble, Open Library.
+                </p>
+                <input
+                  name="scrapeUrl"
+                  placeholder="https://www.goodreads.com/book/show/..."
+                  value={form.scrapeUrl}
+                  onChange={handleChange}
+                  className={errors.scrapeUrl ? "input-error" : ""}
+                />
+                {errors.scrapeUrl && <p className="error-text">{errors.scrapeUrl}</p>}
+              </>
+            ) : (
+              <>
+                <input name="title" placeholder="Title" value={form.title} onChange={handleChange} />
+                {errors.title && <p className="error-text">{errors.title}</p>}
+                <input name="author" placeholder="Author" value={form.author} onChange={handleChange} />
+                {errors.author && <p className="error-text">{errors.author}</p>}
+                <input name="genre" placeholder="Genre" value={form.genre} onChange={handleChange} />
+                {errors.genre && <p className="error-text">{errors.genre}</p>}
+                <input
+                  name="publication_year"
+                  type="number"
+                  placeholder="Publication year"
+                  value={form.publication_year}
+                  onChange={handleChange}
+                />
+                {errors.publication_year && <p className="error-text">{errors.publication_year}</p>}
+                <input name="source" placeholder="Source" value={form.source} onChange={handleChange} />
+                <input name="source_url" placeholder="Source URL (optional)" value={form.source_url} onChange={handleChange} />
+                {errors.source_url && <p className="error-text">{errors.source_url}</p>}
+                <textarea name="synopsis" className="review-textarea" placeholder="Synopsis" value={form.synopsis} onChange={handleChange} />
+                <textarea name="review" className="review-textarea" placeholder="Your review" value={form.review} onChange={handleChange} />
+                <input name="rating" type="number" min="0" max="5" placeholder="Rating (0-5)" value={form.rating} onChange={handleChange} />
+                {errors.rating && <p className="error-text">{errors.rating}</p>}
+                <input name="cover_url" placeholder="Cover URL (optional)" value={form.cover_url} onChange={handleChange} />
+                {errors.cover_url && <p className="error-text">{errors.cover_url}</p>}
+              </>
             )}
 
             {submitError && <p className="error-text">{submitError}</p>}
+            {successMessage && <p className="success-text">{successMessage}</p>}
           </div>
 
           <div className="modal-footer">
-            <button
-              type="button"
-              className="cancel-btn"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
+            <button type="button" className="cancel-btn" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-
-            <button
-              type="submit"
-              className="scrape-submit-btn"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Saving..." : "Save Book"}
+            <button type="submit" className="scrape-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : mode === "scrape" ? "Start Scraping Now" : "Save Book"}
             </button>
           </div>
         </form>

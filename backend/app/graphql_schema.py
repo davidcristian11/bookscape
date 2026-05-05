@@ -6,26 +6,18 @@ from graphql import GraphQLError
 from pydantic import ValidationError
 from strawberry.types import Info
 
-from app.dependencies import auth_service, book_service, quote_card_service
+from app.dependencies import auth_service, book_service, quote_card_service, seed_service
 from app.routes.auth import _extract_bearer_token
-from app.schemas.auth import UserResponse
+from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
 from app.schemas.book import BookCreate, BookResponse, BookUpdate
-from app.schemas.quote_card import (
-    QuoteCardCreate,
-    QuoteCardResponse,
-    QuoteCardUpdate,
-)
+from app.schemas.quote_card import QuoteCardCreate, QuoteCardResponse, QuoteCardUpdate
 
 
 def _format_validation_error(exc: ValidationError) -> str:
-    parts: list[str] = []
-
-    for error in exc.errors():
-        field = ".".join(str(item) for item in error.get("loc", []))
-        message = error.get("msg", "Invalid value")
-        parts.append(f"{field}: {message}")
-
-    return " | ".join(parts) if parts else "Validation failed"
+    return " | ".join(
+        f"{'.'.join(str(item) for item in error.get('loc', []))}: {error.get('msg', 'Invalid value')}"
+        for error in exc.errors()
+    ) or "Validation failed"
 
 
 def _require_current_user(info: Info) -> UserResponse:
@@ -41,19 +33,24 @@ class BookType:
     title: str
     author: str
     genre: str
-    year: int
-    status: str
+    publication_year: int
+    source: str
+    source_url: str | None
+    synopsis: str
+    review: str
     rating: int
-    cover_url: str | None = None
+    cover_url: str | None
 
 
 @strawberry.type
 class QuoteCardType:
     id: str
     book_id: str
-    text: str
-    note: str | None = None
-    tag: str | None = None
+    quote: str
+    note: str | None
+    relationship_label: str | None
+    position_x: float
+    position_y: float
 
 
 @strawberry.type
@@ -65,14 +62,30 @@ class BooksPageType:
     total_pages: int
 
 
+@strawberry.type
+class UserType:
+    id: str
+    name: str
+    email: str
+
+
+@strawberry.type
+class AuthPayloadType:
+    token: str
+    user: UserType
+
+
 @strawberry.input
 class CreateBookInput:
     title: str
     author: str
     genre: str
-    year: int
-    status: str
-    rating: int
+    publication_year: int
+    source: str = "Manual"
+    source_url: str | None = None
+    synopsis: str = ""
+    review: str = ""
+    rating: int = 0
     cover_url: str | None = None
 
 
@@ -81,8 +94,11 @@ class UpdateBookInput:
     title: str | None = None
     author: str | None = None
     genre: str | None = None
-    year: int | None = None
-    status: str | None = None
+    publication_year: int | None = None
+    source: str | None = None
+    source_url: str | None = None
+    synopsis: str | None = None
+    review: str | None = None
     rating: int | None = None
     cover_url: str | None = None
 
@@ -90,16 +106,20 @@ class UpdateBookInput:
 @strawberry.input
 class CreateQuoteInput:
     book_id: str
-    text: str
+    quote: str
     note: str | None = None
-    tag: str | None = None
+    relationship_label: str | None = None
+    position_x: float = 0
+    position_y: float = 0
 
 
 @strawberry.input
 class UpdateQuoteInput:
-    text: str | None = None
+    quote: str | None = None
     note: str | None = None
-    tag: str | None = None
+    relationship_label: str | None = None
+    position_x: float | None = None
+    position_y: float | None = None
 
 
 def _map_book(book: BookResponse) -> BookType:
@@ -108,8 +128,11 @@ def _map_book(book: BookResponse) -> BookType:
         title=book.title,
         author=book.author,
         genre=book.genre,
-        year=book.year,
-        status=book.status.value if hasattr(book.status, "value") else str(book.status),
+        publication_year=book.publication_year,
+        source=book.source,
+        source_url=str(book.source_url) if book.source_url else None,
+        synopsis=book.synopsis,
+        review=book.review,
         rating=book.rating,
         cover_url=str(book.cover_url) if book.cover_url else None,
     )
@@ -119,10 +142,20 @@ def _map_quote(quote: QuoteCardResponse) -> QuoteCardType:
     return QuoteCardType(
         id=quote.id,
         book_id=quote.book_id,
-        text=quote.text,
+        quote=quote.quote,
         note=quote.note,
-        tag=quote.tag,
+        relationship_label=quote.relationship_label,
+        position_x=quote.position_x,
+        position_y=quote.position_y,
     )
+
+
+def _map_user(user: UserResponse) -> UserType:
+    return UserType(id=user.id, name=user.name, email=user.email)
+
+
+def _map_auth(auth: AuthResponse) -> AuthPayloadType:
+    return AuthPayloadType(token=auth.token, user=_map_user(auth.user))
 
 
 async def get_graphql_context(request: Request) -> dict:
@@ -136,24 +169,15 @@ async def get_graphql_context(request: Request) -> dict:
         except Exception:
             current_user = None
 
-    return {
-        "request": request,
-        "current_user": current_user,
-    }
+    return {"request": request, "current_user": current_user}
 
 
 @strawberry.type
 class Query:
     @strawberry.field
-    async def books(
-        self,
-        info: Info,
-        page: int = 1,
-        page_size: int = 10,
-    ) -> BooksPageType:
+    async def books(self, info: Info, page: int = 1, page_size: int = 10) -> BooksPageType:
         current_user = _require_current_user(info)
         result = book_service.list_books(current_user.id, page, page_size)
-
         return BooksPageType(
             items=[_map_book(book) for book in result.items],
             total=result.total,
@@ -166,76 +190,65 @@ class Query:
     async def book(self, info: Info, id: str) -> BookType | None:
         current_user = _require_current_user(info)
         book = book_service.get_book(current_user.id, id)
-
-        if book is None:
-            return None
-
-        return _map_book(book)
+        return _map_book(book) if book else None
 
     @strawberry.field
-    async def quotes_by_book(self, info: Info, book_id: str) -> list[QuoteCardType]:
+    async def quote_cards_by_book(self, info: Info, book_id: str) -> list[QuoteCardType]:
         current_user = _require_current_user(info)
         quotes = quote_card_service.list_quotes_by_book(current_user.id, book_id)
-
         if quotes is None:
             raise GraphQLError("Book not found")
-
         return [_map_quote(quote) for quote in quotes]
+
+    @strawberry.field
+    async def me(self, info: Info) -> UserType:
+        current_user = _require_current_user(info)
+        return _map_user(current_user)
 
 
 @strawberry.type
 class Mutation:
     @strawberry.mutation
-    async def create_book(self, info: Info, input: CreateBookInput) -> BookType:
-        current_user = _require_current_user(info)
-
+    async def register(self, name: str, email: str, password: str) -> AuthPayloadType:
         try:
-            created = book_service.create_book(
-                current_user.id,
-                BookCreate(
-                    title=input.title,
-                    author=input.author,
-                    genre=input.genre,
-                    year=input.year,
-                    status=input.status,
-                    rating=input.rating,
-                    cover_url=input.cover_url,
-                ),
+            auth = auth_service.register(
+                RegisterRequest(name=name, email=email, password=password)
             )
+            seed_service.seed_user_library(auth.user.id)
+        except ValueError as exc:
+            raise GraphQLError(str(exc)) from exc
         except ValidationError as exc:
             raise GraphQLError(_format_validation_error(exc)) from exc
+        return _map_auth(auth)
 
+    @strawberry.mutation
+    async def login(self, email: str, password: str) -> AuthPayloadType:
+        try:
+            auth = auth_service.login(LoginRequest(email=email, password=password))
+        except ValueError as exc:
+            raise GraphQLError(str(exc)) from exc
+        except ValidationError as exc:
+            raise GraphQLError(_format_validation_error(exc)) from exc
+        return _map_auth(auth)
+
+    @strawberry.mutation
+    async def create_book(self, info: Info, input: CreateBookInput) -> BookType:
+        current_user = _require_current_user(info)
+        try:
+            created = book_service.create_book(current_user.id, BookCreate(**input.__dict__))
+        except ValidationError as exc:
+            raise GraphQLError(_format_validation_error(exc)) from exc
         return _map_book(created)
 
     @strawberry.mutation
-    async def update_book(
-        self,
-        info: Info,
-        id: str,
-        input: UpdateBookInput,
-    ) -> BookType:
+    async def update_book(self, info: Info, id: str, input: UpdateBookInput) -> BookType:
         current_user = _require_current_user(info)
-
         try:
-            updated = book_service.update_book(
-                current_user.id,
-                id,
-                BookUpdate(
-                    title=input.title,
-                    author=input.author,
-                    genre=input.genre,
-                    year=input.year,
-                    status=input.status,
-                    rating=input.rating,
-                    cover_url=input.cover_url,
-                ),
-            )
+            updated = book_service.update_book(current_user.id, id, BookUpdate(**input.__dict__))
         except ValidationError as exc:
             raise GraphQLError(_format_validation_error(exc)) from exc
-
         if updated is None:
             raise GraphQLError("Book not found")
-
         return _map_book(updated)
 
     @strawberry.mutation
@@ -244,56 +257,33 @@ class Mutation:
         return book_service.delete_book(current_user.id, id)
 
     @strawberry.mutation
-    async def create_quote(self, info: Info, input: CreateQuoteInput) -> QuoteCardType:
+    async def create_quote_card(self, info: Info, input: CreateQuoteInput) -> QuoteCardType:
         current_user = _require_current_user(info)
-
         try:
             created = quote_card_service.create_quote(
                 current_user.id,
                 input.book_id,
-                QuoteCardCreate(
-                    text=input.text,
-                    note=input.note,
-                    tag=input.tag,
-                ),
+                QuoteCardCreate(**input.__dict__),
             )
         except ValidationError as exc:
             raise GraphQLError(_format_validation_error(exc)) from exc
-
         if created is None:
             raise GraphQLError("Book not found")
-
         return _map_quote(created)
 
     @strawberry.mutation
-    async def update_quote(
-        self,
-        info: Info,
-        quote_id: str,
-        input: UpdateQuoteInput,
-    ) -> QuoteCardType:
+    async def update_quote_card(self, info: Info, quote_id: str, input: UpdateQuoteInput) -> QuoteCardType:
         current_user = _require_current_user(info)
-
         try:
-            updated = quote_card_service.update_quote(
-                current_user.id,
-                quote_id,
-                QuoteCardUpdate(
-                    text=input.text,
-                    note=input.note,
-                    tag=input.tag,
-                ),
-            )
+            updated = quote_card_service.update_quote(current_user.id, quote_id, QuoteCardUpdate(**input.__dict__))
         except ValidationError as exc:
             raise GraphQLError(_format_validation_error(exc)) from exc
-
         if updated is None:
             raise GraphQLError("Quote not found")
-
         return _map_quote(updated)
 
     @strawberry.mutation
-    async def delete_quote(self, info: Info, quote_id: str) -> bool:
+    async def delete_quote_card(self, info: Info, quote_id: str) -> bool:
         current_user = _require_current_user(info)
         return quote_card_service.delete_quote(current_user.id, quote_id)
 

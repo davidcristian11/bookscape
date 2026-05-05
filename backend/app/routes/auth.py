@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
-from app.dependencies import auth_service
+from app.dependencies import auth_service, seed_service
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -52,7 +52,9 @@ def require_authenticated_user(
 )
 def register(payload: RegisterRequest) -> AuthResponse:
     try:
-        return auth_service.register(payload)
+        auth_response = auth_service.register(payload)
+        seed_service.seed_user_library(auth_response.user.id)
+        return auth_response
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

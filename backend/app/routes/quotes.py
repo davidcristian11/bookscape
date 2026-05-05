@@ -13,6 +13,7 @@ router = APIRouter(tags=["quotes"])
 
 
 @router.get("/books/{book_id}/quotes", response_model=list[QuoteCardResponse])
+@router.get("/books/{book_id}/quote-cards", response_model=list[QuoteCardResponse])
 def list_quotes_by_book(
     book_id: str,
     current_user: UserResponse = Depends(require_authenticated_user),
@@ -26,6 +27,11 @@ def list_quotes_by_book(
 
 @router.post(
     "/books/{book_id}/quotes",
+    response_model=QuoteCardResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/books/{book_id}/quote-cards",
     response_model=QuoteCardResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -46,6 +52,7 @@ def create_quote(
 
 
 @router.put("/quotes/{quote_id}", response_model=QuoteCardResponse)
+@router.put("/quote-cards/{quote_id}", response_model=QuoteCardResponse)
 def update_quote(
     quote_id: str,
     payload: QuoteCardUpdate,
@@ -63,6 +70,7 @@ def update_quote(
 
 
 @router.delete("/quotes/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/quote-cards/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_quote(
     quote_id: str,
     current_user: UserResponse = Depends(require_authenticated_user),

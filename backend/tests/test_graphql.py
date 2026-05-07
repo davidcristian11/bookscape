@@ -117,3 +117,160 @@ def test_graphql_book_and_quote_card_mutations():
         {"id": quote_id},
     )
     assert delete_response.json()["data"]["deleteQuoteCard"] is True
+
+
+def test_graphql_auth_mutations_and_me_query():
+    register_response = client.post(
+        "/graphql",
+        json={
+            "query": """
+              mutation {
+                register(name: "Graph Reader", email: "graph@example.com", password: "secret123") {
+                  token
+                  user { name email }
+                }
+              }
+            """
+        },
+    )
+    assert register_response.status_code == 200
+    body = register_response.json()
+    assert "errors" not in body
+    assert body["data"]["register"]["user"]["email"] == "graph@example.com"
+
+    token = body["data"]["register"]["token"]
+    me_response = client.post(
+        "/graphql",
+        json={"query": "{ me { name email } }"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert me_response.json()["data"]["me"]["name"] == "Graph Reader"
+
+    login_response = client.post(
+        "/graphql",
+        json={
+            "query": """
+              mutation {
+                login(email: "graph@example.com", password: "secret123") {
+                  user { email }
+                }
+              }
+            """
+        },
+    )
+    assert login_response.json()["data"]["login"]["user"]["email"] == "graph@example.com"
+
+
+def test_graphql_requires_authentication_for_protected_fields():
+    response = client.post(
+        "/graphql",
+        json={"query": "{ books { total } }"},
+    )
+
+    assert response.status_code == 200
+    assert "Unauthorized" in response.json()["errors"][0]["message"]
+
+
+def test_graphql_validation_and_not_found_errors():
+    headers = register_headers()
+
+    invalid_book = graphql(
+        """
+        mutation {
+          createBook(input: {
+            title: " ",
+            author: "A",
+            genre: "G",
+            publicationYear: 2026,
+            rating: 8
+          }) { id }
+        }
+        """,
+        headers,
+    )
+    assert "rating" in invalid_book.json()["errors"][0]["message"]
+
+    missing_book = graphql(
+        """
+        mutation {
+          updateBook(id: "missing", input: { title: "Still missing" }) { id }
+        }
+        """,
+        headers,
+    )
+    assert "Book not found" in missing_book.json()["errors"][0]["message"]
+
+    missing_quote = graphql(
+        """
+        mutation {
+          updateQuoteCard(quoteId: "missing", input: { note: "Nope" }) { id }
+        }
+        """,
+        headers,
+    )
+    assert "Quote not found" in missing_quote.json()["errors"][0]["message"]
+
+    missing_quote_book = graphql(
+        """
+        query {
+          quoteCardsByBook(bookId: "missing") { quote }
+        }
+        """,
+        headers,
+    )
+    assert "Book not found" in missing_quote_book.json()["errors"][0]["message"]
+
+
+def test_graphql_update_and_delete_book_flow():
+    headers = register_headers()
+    create_response = graphql(
+        """
+        mutation {
+          createBook(input: {
+            title: "Graph Book",
+            author: "Ada",
+            genre: "Testing",
+            publicationYear: 2026,
+            rating: 4
+          }) { id title }
+        }
+        """,
+        headers,
+    )
+    book_id = create_response.json()["data"]["createBook"]["id"]
+
+    update_response = graphql(
+        """
+        mutation UpdateBook($id: String!) {
+          updateBook(id: $id, input: { review: "Updated", rating: 5 }) {
+            review
+            rating
+          }
+        }
+        """,
+        headers,
+        {"id": book_id},
+    )
+    assert update_response.json()["data"]["updateBook"]["review"] == "Updated"
+    assert update_response.json()["data"]["updateBook"]["rating"] == 5
+
+    query_response = graphql(
+        "query Book($id: String!) { book(id: $id) { title rating } }",
+        headers,
+        {"id": book_id},
+    )
+    assert query_response.json()["data"]["book"]["title"] == "Graph Book"
+
+    delete_response = graphql(
+        "mutation DeleteBook($id: String!) { deleteBook(id: $id) }",
+        headers,
+        {"id": book_id},
+    )
+    assert delete_response.json()["data"]["deleteBook"] is True
+
+    missing = graphql(
+        "query Book($id: String!) { book(id: $id) { title } }",
+        headers,
+        {"id": book_id},
+    )
+    assert missing.json()["data"]["book"] is None

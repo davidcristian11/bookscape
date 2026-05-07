@@ -1,16 +1,25 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
 import { registerUser } from "../api/authApi";
-import { saveAuthSession } from "../utils/authStorage";
+import {
+  getAuthRecoveryMessage,
+  getLastKnownUser,
+  saveAuthSession,
+} from "../utils/authStorage";
 import "./FormStyles.css";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const lastKnownUser = getLastKnownUser();
+  const recoveryMessage = getAuthRecoveryMessage();
+  const recoveryState = location.state?.recovery || {};
 
   const [form, setForm] = useState({
-    name: "",
-    email: "",
+    name: recoveryState.name || lastKnownUser?.name || "",
+    email: recoveryState.email || lastKnownUser?.email || "",
     password: "",
   });
 
@@ -73,41 +82,48 @@ export default function RegisterPage() {
       author="Ernest Hemingway"
     >
       <h2 className="form-title">Create Your Account</h2>
+      <p className="form-intro">Start with a quiet library space that feels made for your reading life.</p>
 
       <form className="auth-form" onSubmit={handleRegister} noValidate>
         <div className="input-group">
-          <label>Name</label>
+          <label htmlFor="register-name">Name</label>
           <input
+            id="register-name"
             type="text"
             name="name"
             placeholder="Your Name"
             required
             value={form.name}
             onChange={handleChange}
+            aria-invalid={validationErrors.some((message) => message.toLowerCase().includes("name"))}
           />
         </div>
 
         <div className="input-group">
-          <label>Email</label>
+          <label htmlFor="register-email">Email</label>
           <input
+            id="register-email"
             type="email"
             name="email"
             placeholder="your@email.com"
             required
             value={form.email}
             onChange={handleChange}
+            aria-invalid={validationErrors.some((message) => message.toLowerCase().includes("email"))}
           />
         </div>
 
         <div className="input-group">
-          <label>Password</label>
+          <label htmlFor="register-password">Password</label>
           <input
+            id="register-password"
             type="password"
             name="password"
             placeholder="Choose a password"
             required
             value={form.password}
             onChange={handleChange}
+            aria-invalid={validationErrors.some((message) => message.toLowerCase().includes("password"))}
           />
         </div>
 
@@ -123,6 +139,15 @@ export default function RegisterPage() {
           <p className="error-text" role="alert">
             {error}
           </p>
+        )}
+
+        {(recoveryMessage || recoveryState.email || lastKnownUser?.email) && (
+          <div className="helper-text" role="status">
+            <p>
+              Backend accounts are RAM-only and reset after restart. Re-register with the same
+              email to reconnect this browser&apos;s queued offline changes.
+            </p>
+          </div>
         )}
 
         <button type="submit" className="submit-btn" disabled={isSubmitting}>

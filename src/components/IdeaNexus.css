@@ -1,162 +1,259 @@
 .nexus-container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 2rem;
-    /* Setăm o înălțime fixă (ecranul minus bara de navigație) pentru ca planșa să aibă limite în care să te plimbi */
-    height: calc(100vh - 120px);
-    display: flex;
-    flex-direction: column;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 1440px);
+  height: calc(100vh - 76px);
+  margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 2rem);
 }
 
 .nexus-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-}
-
-.nexus-header h1 {
-    font-family: Georgia, serif;
-    font-size: 2.5rem;
-    color: var(--text-dark);
-}
-
-.add-quote-btn {
-    background-color: var(--accent-orange);
-    color: white;
-    border: none;
-    padding: 0.8rem 1.5rem;
-    border-radius: 4px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.canvas-wrapper {
-    flex: 1; /* Ocupă tot spațiul vertical rămas disponibil */
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: #FAFAFA;
-    overflow: hidden;
-}
-
-/* --- Stilurile pentru Nodul Personalizat (Cardul cu Citat) --- */
-.quote-card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 6px;
-    width: 280px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    border: 1px solid var(--border-color);
-    animation: nexusCardIn 0.24s ease both;
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.quote-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 28px rgba(44, 74, 62, 0.12);
-}
-
-.quote-meta {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.mock-cover-small {
-    width: 30px;
-    height: 45px;
-    background-color: #EAEAEA;
-    border-radius: 2px;
-}
-
-.quote-source {
-    display: flex;
-    flex-direction: column;
-}
-
-.from-text {
-    color: var(--text-gray);
-    font-size: 0.8rem;
-}
-
-.quote-text {
-    font-family: Georgia, serif;
-    font-style: italic;
-    color: var(--text-dark);
-    line-height: 1.5;
-    margin-bottom: 1.5rem;
-    font-size: 1.05rem;
-}
-
-.quote-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.connect-btn {
-    flex: 1;
-    background-color: #E2EFE9;
-    color: var(--primary-green);
-    border: none;
-    padding: 0.5rem;
-    border-radius: 4px;
-    font-weight: bold;
-    margin-right: 1rem;
-    cursor: pointer;
-}
-
-.delete-node-btn {
-    background: #fff1f2;
-    border: 1px solid #fecdd3;
-    border-radius: 4px;
-    color: #9f1239;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 700;
-    padding: 0.45rem 0.75rem;
-}
-
-/* Redefinim aspectul 'Handles' (punctele din care tragi liniile) */
-.custom-handle {
-    width: 12px;
-    height: 12px;
-    background-color: var(--primary-green) !important;
-    border: 2px solid white !important;
-}
-
-@keyframes nexusCardIn {
-    from { opacity: 0; transform: translateY(8px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+  margin-bottom: 1rem;
 }
 
 .nexus-form {
-    display: grid;
-    grid-template-columns: 1.2fr 1.5fr 1fr 1fr auto;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+  display: grid;
+  grid-template-columns: 1.15fr 1.5fr 1fr 1fr auto;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(202, 188, 167, 0.66);
+  border-radius: var(--radius-md);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: var(--shadow-soft);
+  padding: 0.85rem;
 }
 
-.nexus-form input,
-.nexus-form select {
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 0.75rem;
-    min-width: 0;
+.add-quote-btn {
+  border: 1px solid var(--accent-orange);
+  background: var(--accent-orange);
+  color: white;
+  box-shadow: 0 10px 22px rgba(199, 91, 51, 0.16);
+  white-space: nowrap;
 }
 
-@media (max-width: 900px) {
-    .nexus-container {
-        height: auto;
-        min-height: calc(100vh - 120px);
-    }
+.add-quote-btn:hover {
+  border-color: var(--accent-orange-hover);
+  background: var(--accent-orange-hover);
+}
 
-    .nexus-form {
-        grid-template-columns: 1fr;
-    }
+.canvas-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 520px;
+  border: 1px solid rgba(202, 188, 167, 0.72);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(246, 239, 227, 0.9)),
+    var(--surface-color);
+  box-shadow: var(--shadow-lifted);
+  overflow: hidden;
+}
 
-    .canvas-wrapper {
-        min-height: 580px;
-    }
+.canvas-wrapper .react-flow__controls {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.canvas-wrapper .react-flow__controls-button {
+  border-bottom-color: var(--border-color);
+  background: var(--surface-color);
+}
+
+.canvas-wrapper .react-flow__edge-path {
+  stroke: rgba(44, 74, 62, 0.58);
+  stroke-width: 2;
+}
+
+.canvas-wrapper .react-flow__edge-textbg {
+  fill: var(--surface-color);
+}
+
+.canvas-wrapper .react-flow__edge-text {
+  fill: var(--primary-green);
+  font-weight: 800;
+}
+
+.quote-card {
+  width: 285px;
+  border: 1px solid rgba(202, 188, 167, 0.78);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(251, 246, 236, 0.96)),
+    var(--surface-color);
+  box-shadow: 0 16px 34px rgba(44, 74, 62, 0.14);
+  padding: 1.25rem;
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.quote-card:hover {
+  box-shadow: 0 22px 44px rgba(44, 74, 62, 0.18);
+  transform: translateY(-3px);
+}
+
+.quote-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+
+.mock-cover-small {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 48px;
+  border-left: 6px solid var(--accent-orange);
+  border-radius: var(--radius-xs);
+  background:
+    linear-gradient(90deg, rgba(44, 74, 62, 0.1), transparent 42%),
+    #eadfcd;
+  box-shadow: 0 8px 14px rgba(44, 74, 62, 0.14);
+}
+
+.quote-source {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.quote-source strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.from-text {
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nexus-quote-text {
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 1.04rem;
+  font-style: italic;
+  line-height: 1.55;
+  margin: 0 0 1rem;
+}
+
+.quote-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.delete-node-btn {
+  border: 1px solid #f4bbc6;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 900;
+  padding: 0.5rem 0.72rem;
+}
+
+.delete-node-btn:hover {
+  background: #ffe3e8;
+}
+
+.custom-handle {
+  width: 12px;
+  height: 12px;
+  border: 2px solid white !important;
+  background: var(--primary-green) !important;
+  box-shadow: 0 4px 8px rgba(44, 74, 62, 0.2);
+}
+
+.nexus-error-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.nexus-error-card p {
+  margin: 0;
+}
+
+.nexus-empty-note {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: min(90%, 360px);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: rgba(255, 253, 248, 0.82);
+  color: var(--text-gray);
+  padding: 1.35rem;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.nexus-empty-note h3 {
+  margin: 0 0 0.35rem;
+}
+
+.nexus-empty-note p {
+  margin: 0;
+}
+
+.nexus-loading-board {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid rgba(202, 188, 167, 0.72);
+  border-radius: var(--radius-md);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: var(--shadow-soft);
+  padding: 1.25rem;
+}
+
+.nexus-loading-board p {
+  margin: 0;
+  color: var(--text-gray);
+  font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .nexus-container {
+    height: auto;
+    min-height: calc(100vh - 76px);
+  }
+
+  .nexus-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .add-quote-btn {
+    grid-column: 1 / -1;
+  }
+
+  .canvas-wrapper {
+    min-height: 590px;
+  }
+}
+
+@media (max-width: 620px) {
+  .nexus-form {
+    grid-template-columns: 1fr;
+  }
+
+  .canvas-wrapper {
+    min-height: 560px;
+  }
+
+  .nexus-error-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }

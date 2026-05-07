@@ -150,13 +150,15 @@ query {
 }
 ```
 
+GraphiQL executes one selected operation at a time. If a document contains multiple anonymous operations, name them and choose one operation, or run the register/login mutation first and then the books query separately.
+
 ## Offline Demo
 
 Use browser DevTools Network Offline to demonstrate offline mode. Add/update/delete books while offline, then switch back online to see queued operations sync. This is the recommended demo path because it keeps the in-memory backend session alive.
 
 If the backend is stopped or restarted, server data and sessions are cleared by design because the assignment requires RAM-only storage. BookScape keeps safe client-side offline state, including the last known user id/name/email, cached books, and queued Book CRUD operations. It does not store plaintext passwords and does not pretend the server session survived.
 
-After a backend restart, the app keeps queued offline changes and shows that the in-memory server session expired. Log in or register again, then BookScape reuses the new token/session and retries syncing the existing offline queue.
+After a backend restart, the old login may fail because the RAM-only backend forgot the account. The app keeps queued offline changes and shows that the in-memory server session expired. Try logging in first; if the account no longer exists, re-register with the same email/name and enter a password again. BookScape keeps the queue scoped by email, reuses the new token/session, and retries syncing the existing offline queue.
 
 ## Known Limitations
 

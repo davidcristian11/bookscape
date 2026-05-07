@@ -148,7 +148,26 @@ describe("booksApi offline queue", () => {
     expect(getOfflineQueue()[0].status).toBe("paused-auth");
     expect(getLocalBooksCache()).toHaveLength(1);
     expect(getLocalBooksCache()[0]._syncStatus).toBe("auth-required");
-    expect(localStorage.getItem("bookscape_auth_token")).toBe("token-1");
+    expect(localStorage.getItem("bookscape_auth_token")).toBeNull();
+    expect(localStorage.getItem("bookscape_auth_user")).toContain("reader@example.com");
+    expect(localStorage.getItem("bookscape_session_recovery_message")).toMatch(/in-memory session expired/i);
+  });
+
+  it("refresh with queued offline changes preserves queue and local optimistic book", async () => {
+    setOnline(false);
+    global.fetch = vi.fn(() => Promise.reject(new TypeError("offline")));
+
+    const { createBook } = await import("../booksApi.js");
+    await createBook(payload);
+
+    vi.resetModules();
+
+    const { getOfflineQueueCount } = await import("../booksApi.js");
+    const { getLocalBooksCache } = await import("../../utils/localBooksStore.js");
+
+    expect(getOfflineQueueCount()).toBe(1);
+    expect(getLocalBooksCache()).toHaveLength(1);
+    expect(getLocalBooksCache()[0]._offline).toBe(true);
   });
 
   it("after re-login with the same email, queued operations sync with the new token", async () => {
@@ -195,5 +214,83 @@ describe("booksApi offline queue", () => {
     expect(getOfflineQueueCount()).toBe(0);
     expect(getLocalBooksCache()).toHaveLength(1);
     expect(getLocalBooksCache()[0].id).toBe("server-after-login");
+  });
+
+  it("server refetch after backend restart replaces stale seeded cache instead of appending duplicates", async () => {
+    const { setLocalBooksCache, getLocalBooksCache } = await import("../../utils/localBooksStore.js");
+    setLocalBooksCache([
+      { id: "old-dune", title: "Dune", author: "Frank Herbert", genre: "Sci-Fi", rating: 5 },
+      { id: "old-dune-2", title: "Dune", author: "Frank Herbert", genre: "Sci-Fi", rating: 5 },
+      { id: "old-1984", title: "1984", author: "George Orwell", genre: "Dystopia", rating: 5 },
+      { id: "old-habits", title: "Atomic Habits", author: "James Clear", genre: "Self-improvement", rating: 4 },
+      {
+        id: "offline-1",
+        title: "Offline Added",
+        author: "Local Reader",
+        genre: "Memoir",
+        rating: 4,
+        _offline: true,
+        _syncStatus: "pending",
+        _clientMutationId: "offline-1",
+      },
+    ]);
+
+    global.fetch = vi.fn(async (url, options = {}) => {
+      if (String(url).includes("/books?") && options.method === "GET") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              { id: "new-dune", title: "Dune", author: "Frank Herbert", genre: "Sci-Fi", rating: 5 },
+              { id: "new-1984", title: "1984", author: "George Orwell", genre: "Dystopia", rating: 5 },
+              { id: "new-habits", title: "Atomic Habits", author: "James Clear", genre: "Self-improvement", rating: 4 },
+            ],
+            total: 3,
+            page: 1,
+            page_size: 10,
+            total_pages: 1,
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+
+    const { getBooks } = await import("../booksApi.js");
+    await getBooks(1, 10);
+
+    const books = getLocalBooksCache();
+    expect(books).toHaveLength(4);
+    expect(books.filter((book) => book.title === "Dune")).toHaveLength(1);
+    expect(books.filter((book) => book.title === "1984")).toHaveLength(1);
+    expect(books.filter((book) => book.title === "Atomic Habits")).toHaveLength(1);
+    expect(books.filter((book) => book.title === "Offline Added")).toHaveLength(1);
+  });
+
+  it("queued work with no active token pauses sync without clearing local state", async () => {
+    setOnline(false);
+    global.fetch = vi.fn(() => Promise.reject(new TypeError("offline")));
+
+    const { createBook } = await import("../booksApi.js");
+    await createBook(payload);
+
+    localStorage.removeItem("bookscape_auth_token");
+    setOnline(true);
+    global.fetch = vi.fn(async (url, options = {}) => {
+      if (String(url).endsWith("/") && options.method === "GET") {
+        return { ok: true };
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+
+    const { syncQueuedBookOperations, getOfflineQueueCount } = await import("../booksApi.js");
+    const { getLocalBooksCache } = await import("../../utils/localBooksStore.js");
+    const result = await syncQueuedBookOperations();
+
+    expect(result.authExpired).toBe(true);
+    expect(getOfflineQueueCount()).toBe(1);
+    expect(getLocalBooksCache()).toHaveLength(1);
+    expect(getLocalBooksCache()[0]._offline).toBe(true);
   });
 });

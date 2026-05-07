@@ -34,6 +34,7 @@ Important behavior:
 - Tests mock scraper network behavior; they do not depend on live external websites.
 - GraphQL uses the same auth/session mechanism as REST. In GraphiQL, add `{"Authorization": "Bearer <token>"}` to HTTP headers, or run the `login` GraphQL mutation first and copy the returned token.
 - Backend restarts clear sessions and data because all assignment storage is RAM-only.
-- The frontend may keep a client-side offline Book CRUD queue and minimal last-known profile data while the backend is unreachable. After a backend restart, users must log in/register again before that client-side queue can sync with the new in-memory session.
+- The frontend may keep a client-side offline Book CRUD queue and minimal last-known profile data while the backend is unreachable. After a backend restart, users must log in again, or re-register with the same email if the RAM-only account no longer exists, before that client-side queue can sync with the new in-memory session.
+- For offline demonstrations, prefer browser DevTools Network Offline over stopping the backend, because stopping the backend intentionally resets RAM-only users, sessions, books, and quote cards.
 
 No database or persistence layer is used.

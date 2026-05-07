@@ -41,6 +41,13 @@ app.include_router(nexus_router)
 app.include_router(quotes_router)
 app.include_router(automation_router)
 app.include_router(ws_router)
+app.include_router(auth_router, prefix="/api")
+app.include_router(books_router, prefix="/api")
+app.include_router(stats_router, prefix="/api")
+app.include_router(nexus_router, prefix="/api")
+app.include_router(quotes_router, prefix="/api")
+app.include_router(automation_router, prefix="/api")
+app.include_router(ws_router, prefix="/api")
 app.include_router(graphql_app, prefix="/graphql")
 
 

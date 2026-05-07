@@ -1,32 +1,99 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import LoginPage from '../LoginPage';
-import { describe, it, expect } from 'vitest';
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import LoginPage from "../LoginPage";
+import { loginUser } from "../../api/authApi";
+import {
+  getAuthRecoveryMessage,
+  getLastKnownUser,
+  saveAuthSession,
+} from "../../utils/authStorage";
 
-describe('LoginPage Component', () => {
-    it('permite completarea formularului și trimiterea lui', () => {
-        render(
-            <BrowserRouter>
-                <LoginPage />
-            </BrowserRouter>
-        );
+vi.mock("../../api/authApi", () => ({
+  loginUser: vi.fn(),
+}));
 
-        // Testăm dacă găsește titlul din AuthLayout
-        expect(screen.getByText('Welcome Back')).toBeDefined();
+vi.mock("../../utils/authStorage", () => ({
+  getAuthRecoveryMessage: vi.fn(() => null),
+  getLastKnownUser: vi.fn(() => null),
+  saveAuthSession: vi.fn(),
+}));
 
-        // Completăm adresa de email (căutăm după placeholder)
-        const emailInput = screen.getByPlaceholderText('your@email.com');
-        fireEvent.change(emailInput, { target: { value: 'test@bookscape.com' } });
+describe("LoginPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getAuthRecoveryMessage.mockReturnValue(null);
+    getLastKnownUser.mockReturnValue(null);
+  });
 
-        // Completăm parola
-        const passInput = screen.getByPlaceholderText('••••••••');
-        fireEvent.change(passInput, { target: { value: 'parolamea' } });
+  it("shows client-side validation for invalid email", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
 
-        // Apăsăm submit
-        const submitButton = screen.getByText('Log In');
-        fireEvent.click(submitButton);
+    await user.type(screen.getByPlaceholderText("your@email.com"), "bad-email");
+    await user.type(screen.getByPlaceholderText("Enter your password"), "secret");
+    await user.click(screen.getByRole("button", { name: /log in/i }));
 
-        // Deoarece în LoginPage avem doar `Maps('/library')` la submit,
-        // acest test doar se asigură că formularul poate fi completat și trimis fără să crape.
+    expect(screen.getByText(/valid email/i)).toBeInTheDocument();
+  });
+
+  it("validates a missing password", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+
+    await user.type(screen.getByPlaceholderText("your@email.com"), "reader@example.com");
+    await user.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(screen.getByText(/password is required/i)).toBeInTheDocument();
+    expect(loginUser).not.toHaveBeenCalled();
+  });
+
+  it("saves the session after a successful login", async () => {
+    const user = userEvent.setup();
+    const authData = {
+      token: "token-1",
+      user: { id: "user-1", name: "Reader", email: "reader@example.com" },
+    };
+    loginUser.mockResolvedValue(authData);
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+
+    await user.type(screen.getByPlaceholderText("your@email.com"), "reader@example.com");
+    await user.type(screen.getByPlaceholderText("Enter your password"), "secret123");
+    await user.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(loginUser).toHaveBeenCalledWith({
+      email: "reader@example.com",
+      password: "secret123",
     });
+    expect(saveAuthSession).toHaveBeenCalledWith(authData);
+  });
+
+  it("shows backend login errors", async () => {
+    const user = userEvent.setup();
+    loginUser.mockRejectedValue(new Error("Invalid credentials"));
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+
+    await user.type(screen.getByPlaceholderText("your@email.com"), "reader@example.com");
+    await user.type(screen.getByPlaceholderText("Enter your password"), "wrong");
+    await user.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
+  });
+
+  it("prefills recovery email and offers re-registration after backend restart", () => {
+    getAuthRecoveryMessage.mockReturnValue(
+      "The backend restarted and your in-memory session expired."
+    );
+    getLastKnownUser.mockReturnValue({
+      name: "Reader",
+      email: "reader@example.com",
+    });
+
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+
+    expect(screen.getByDisplayValue("reader@example.com")).toBeInTheDocument();
+    expect(screen.getByText(/re-register with the same email/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /re-register/i })).toBeInTheDocument();
+  });
 });

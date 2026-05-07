@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build --configLoader native",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "coverage": "vitest run --coverage"
+    "test": "vitest run --configLoader native --pool vmThreads",
+    "coverage": "vitest run --configLoader native --pool vmThreads --coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@faker-js/faker": "^10.4.0",

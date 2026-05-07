@@ -1,9 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from app.dependencies import book_service, realtime_service
+from app.dependencies import book_service, quote_card_service, realtime_service
 from app.routes.auth import require_authenticated_user
 from app.schemas.auth import UserResponse
-from app.schemas.book import BookCreate, BookResponse, BookUpdate, PaginatedBooksResponse
+from app.schemas.book import (
+    BookCreate,
+    BookResponse,
+    BookUpdate,
+    PaginatedBooksResponse,
+    ScrapeBookRequest,
+)
+from app.services.scraper_service import ScraperError
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -20,7 +27,32 @@ async def create_book(
         {
             "type": "book_created",
             "source": "manual",
-            "book": created_book.model_dump(),
+            "book": created_book.model_dump(mode="json"),
+        },
+    )
+
+    return created_book
+
+
+@router.post("/scrape", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
+async def scrape_book(
+    payload: ScrapeBookRequest,
+    current_user: UserResponse = Depends(require_authenticated_user),
+) -> BookResponse:
+    try:
+        created_book = book_service.scrape_book(current_user.id, payload)
+    except ScraperError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    await realtime_service.broadcast_to_user(
+        current_user.id,
+        {
+            "type": "book_created",
+            "source": "scrape",
+            "book": created_book.model_dump(mode="json"),
         },
     )
 
@@ -63,7 +95,7 @@ async def update_book(
         {
             "type": "book_updated",
             "source": "manual",
-            "book": updated_book.model_dump(),
+            "book": updated_book.model_dump(mode="json"),
         },
     )
 
@@ -78,6 +110,8 @@ async def delete_book(
     deleted = book_service.delete_book(current_user.id, book_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Book not found")
+
+    quote_card_service.delete_quotes_for_book(current_user.id, book_id)
 
     await realtime_service.broadcast_to_user(
         current_user.id,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { logoutUser } from "../api/authApi";
 import {
   clearAuthSession,
@@ -7,6 +8,7 @@ import {
   getStoredUser,
   isAuthenticated,
 } from "../utils/authStorage";
+import "./Navbar.css";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -28,7 +30,7 @@ export default function Navbar() {
         await logoutUser(token);
       }
     } catch {
-      // chiar dacă requestul pică, curățăm sesiunea locală
+      // Clear the local session even if the in-memory backend already restarted.
     } finally {
       clearAuthSession();
       setAuthenticated(false);
@@ -37,87 +39,65 @@ export default function Navbar() {
     }
   };
 
+  const isActive = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+
   return (
-    <nav
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "1rem 2rem",
-        borderBottom: "1px solid #e5e5e5",
-        background: "white",
-      }}
+    <motion.nav
+      className="navbar"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.24, ease: "easeOut" }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-        <Link
-          to="/"
-          style={{
-            textDecoration: "none",
-            fontWeight: "bold",
-            fontSize: "1.2rem",
-            color: "#1f2937",
-          }}
-        >
-          BookScape
+      <div className="navbar-left">
+        <Link to="/" className="navbar-brand" aria-label="BookScape home">
+          <span className="brand-mark" aria-hidden="true">
+            BS
+          </span>
+          <span className="logo-text">BookScape</span>
         </Link>
 
         {authenticated && (
-          <>
-            <Link to="/library" style={{ textDecoration: "none", color: "#374151" }}>
+          <div className="navbar-links" aria-label="Primary navigation">
+            <Link to="/library" className={`nav-link ${isActive("/library") ? "active" : ""}`}>
               Library
             </Link>
-            <Link to="/insights" style={{ textDecoration: "none", color: "#374151" }}>
+            <Link to="/insights" className={`nav-link ${isActive("/insights") ? "active" : ""}`}>
               Insights
             </Link>
-            <Link to="/nexus" style={{ textDecoration: "none", color: "#374151" }}>
+            <Link to="/nexus" className={`nav-link ${isActive("/nexus") ? "active" : ""}`}>
               Idea Nexus
             </Link>
-          </>
+          </div>
         )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+      <div className="navbar-actions">
         {authenticated ? (
           <>
-            <span style={{ color: "#6b7280" }}>
-              {user ? `Hi, ${user.name}` : "Logged in"}
-            </span>
-            <button
+            <span className="nav-user">{user ? `Hi, ${user.name}` : "Logged in"}</span>
+            <motion.button
+              type="button"
               onClick={handleLogout}
-              style={{
-                border: "none",
-                background: "#ef4444",
-                color: "white",
-                padding: "0.55rem 1rem",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
+              className="nav-link-button sign-out"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.98 }}
             >
               Logout
-            </button>
+            </motion.button>
           </>
         ) : (
           <>
-            <Link to="/login" style={{ textDecoration: "none", color: "#374151" }}>
+            <Link to="/login" className={`nav-link ${isActive("/login") ? "active" : ""}`}>
               Login
             </Link>
-            <Link
-              to="/register"
-              style={{
-                textDecoration: "none",
-                background: "#10b981",
-                color: "white",
-                padding: "0.55rem 1rem",
-                borderRadius: "6px",
-                fontWeight: "bold",
-              }}
-            >
-              Register
-            </Link>
+            <motion.div whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }}>
+              <Link to="/register" className="nav-btn-solid">
+                Register
+              </Link>
+            </motion.div>
           </>
         )}
       </div>
-    </nav>
+    </motion.nav>
   );
 }

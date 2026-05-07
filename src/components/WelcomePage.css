@@ -1,105 +1,265 @@
 .welcome-container {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 4rem;
-    /* 100vh (înălțimea ecranului) minus bara de navigație (aprox 80px) */
-    min-height: calc(100vh - 80px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+  align-items: center;
+  gap: clamp(2rem, 6vw, 5rem);
+  max-width: 1220px;
+  min-height: calc(100vh - 76px);
+  margin: 0 auto;
+  padding: clamp(2rem, 6vw, 5rem) clamp(1.25rem, 5vw, 4rem);
 }
 
-/* --- Partea Stângă (Text) --- */
 .welcome-text-section {
-    flex: 1; /* Ocupă jumătate din spațiu */
-    padding-right: 4rem;
+  max-width: 650px;
+}
+
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  color: var(--accent-orange);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hero-kicker::before {
+  content: "";
+  width: 2rem;
+  height: 2px;
+  background: var(--accent-orange);
 }
 
 .welcome-title {
-    font-family: Georgia, serif;
-    font-size: 3.5rem;
-    color: var(--text-dark);
-    margin-bottom: 1.5rem;
-    line-height: 1.2;
+  max-width: 11ch;
+  margin: 0 0 1.25rem;
+  font-size: clamp(3rem, 7vw, 6.4rem);
 }
 
 .welcome-description {
-    font-size: 1.2rem;
-    color: var(--text-gray);
-    margin-bottom: 2.5rem;
-    line-height: 1.6;
-    max-width: 550px;
+  max-width: 590px;
+  margin: 0 0 2rem;
+  color: var(--text-gray);
+  font-size: clamp(1.05rem, 2vw, 1.24rem);
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-bottom: 1.8rem;
+}
+
+.start-btn,
+.start-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.15rem;
+  border-radius: var(--radius-sm);
+  font-weight: 900;
+  text-decoration: none;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .start-btn {
-    display: inline-block;
-    background-color: var(--accent-orange);
-    color: white;
-    text-decoration: none;
-    padding: 1rem 2rem;
-    border-radius: 4px;
-    font-size: 1.1rem;
-    font-weight: bold;
-    transition: background-color 0.2s ease, transform 0.1s ease;
+  border: 1px solid var(--accent-orange);
+  background: var(--accent-orange);
+  color: white;
+  padding: 0.9rem 1.45rem;
+  box-shadow: 0 16px 32px rgba(199, 91, 51, 0.22);
 }
 
 .start-btn:hover {
-    background-color: var(--accent-orange-hover);
-    transform: translateY(-2px); /* Un mic efect de ridicare la hover */
+  border-color: var(--accent-orange-hover);
+  background: var(--accent-orange-hover);
+  box-shadow: 0 20px 40px rgba(199, 91, 51, 0.26);
 }
 
+.start-secondary {
+  border: 1px solid var(--border-color);
+  background: rgba(255, 253, 248, 0.7);
+  color: var(--primary-green);
+  padding: 0.9rem 1.1rem;
+}
 
-/* --- Partea Dreaptă (Vizualul) --- */
+.start-secondary:hover {
+  border-color: rgba(44, 74, 62, 0.24);
+  background: var(--surface-color);
+}
+
+.hero-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.hero-proof span {
+  border: 1px solid rgba(202, 188, 167, 0.75);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 253, 248, 0.58);
+  padding: 0.44rem 0.7rem;
+}
+
 .welcome-visual-section {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative; /* Esențial pentru ca elementele absolute să se raporteze la el */
-    height: 500px;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
 }
 
-.center-circle {
-    width: 160px;
-    height: 160px;
-    background-color: var(--accent-orange);
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: white;
-    font-family: Georgia, serif;
-    font-size: 1.2rem;
-    text-align: center;
-    padding: 1rem;
-    box-shadow: 0 10px 30px rgba(199, 91, 51, 0.3);
-    z-index: 10; /* Ține cercul deasupra posibilelor margini ale cărților */
+.library-scene {
+  position: relative;
+  width: min(100%, 470px);
+  min-height: 520px;
+  border: 1px solid rgba(202, 188, 167, 0.65);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.9), rgba(244, 234, 218, 0.92)),
+    repeating-linear-gradient(0deg, transparent 0 76px, rgba(202, 188, 167, 0.28) 76px 78px);
+  box-shadow: var(--shadow-lifted);
+  overflow: hidden;
 }
 
-.orbiting-book {
-    width: 70px;
-    height: 100px;
-    background-color: #F0F0F0; /* Culoarea gri deschis din design */
-    border-radius: 4px;
-    position: absolute;
-    /* Centrarea elementului înainte de a-l roti și muta */
-    top: 50%;
-    left: 50%;
-    margin-top: -50px; /* Jumătate din înălțime */
-    margin-left: -35px; /* Jumătate din lățime */
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+.library-scene::before,
+.library-scene::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 10px;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(90deg, #8c6040, #c99b68, #7a5037);
+  box-shadow: 0 10px 22px rgba(65, 44, 26, 0.18);
 }
 
-/* --- Responsive Design --- */
-@media (max-width: 1024px) {
-    .welcome-container {
-        flex-direction: column;
-        text-align: center;
-        padding: 2rem;
-        gap: 4rem;
-    }
+.library-scene::before {
+  top: 172px;
+}
 
-    .welcome-text-section {
-        padding-right: 0;
-    }
+.library-scene::after {
+  bottom: 126px;
+}
+
+.shelf {
+  position: absolute;
+  left: 14%;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.42rem;
+}
+
+.shelf-top {
+  top: 50px;
+}
+
+.shelf-bottom {
+  bottom: 136px;
+}
+
+.book-spine {
+  display: block;
+  width: 34px;
+  border-radius: var(--radius-xs) var(--radius-xs) 2px 2px;
+  box-shadow: inset -8px 0 0 rgba(0, 0, 0, 0.1), 0 8px 16px rgba(44, 74, 62, 0.16);
+}
+
+.book-spine.slim {
+  width: 26px;
+}
+
+.reading-card {
+  position: absolute;
+  right: 9%;
+  top: 138px;
+  width: 210px;
+  border: 1px solid rgba(44, 74, 62, 0.12);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+  box-shadow: 0 18px 34px rgba(44, 74, 62, 0.14);
+  padding: 1.25rem;
+}
+
+.card-line {
+  display: block;
+  width: 72%;
+  height: 8px;
+  margin-bottom: 0.7rem;
+  border-radius: 999px;
+  background: rgba(44, 74, 62, 0.16);
+}
+
+.card-line.wide {
+  width: 100%;
+  background: rgba(199, 91, 51, 0.35);
+}
+
+.card-line.short {
+  width: 48%;
+  margin-bottom: 0;
+}
+
+.catalog-chip {
+  position: absolute;
+  right: 12%;
+  bottom: 46px;
+  border: 1px solid rgba(44, 74, 62, 0.18);
+  border-radius: var(--radius-sm);
+  background: var(--primary-green);
+  color: white;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  padding: 0.62rem 0.92rem;
+  box-shadow: 0 14px 28px rgba(44, 74, 62, 0.22);
+}
+
+@media (max-width: 900px) {
+  .welcome-container {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding-top: 2rem;
+    text-align: left;
+  }
+
+  .welcome-title {
+    max-width: 12ch;
+  }
+
+  .library-scene {
+    min-height: 430px;
+  }
+}
+
+@media (max-width: 560px) {
+  .welcome-container {
+    padding-inline: 1rem;
+  }
+
+  .welcome-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .start-btn,
+  .start-secondary {
+    width: 100%;
+  }
+
+  .library-scene {
+    min-height: 370px;
+  }
+
+  .reading-card {
+    right: 6%;
+    width: 170px;
+  }
 }

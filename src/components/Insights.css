@@ -1,104 +1,103 @@
-.insights-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
+.insights-page {
+  max-width: 1240px;
 }
 
-.insights-title {
-    font-family: Georgia, serif;
-    font-size: 2.5rem;
-    margin-bottom: 2rem;
-    color: var(--text-dark);
+.inline-alert {
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
 }
 
-.charts-grid {
-    display: flex;
-    gap: 2rem;
-    margin-bottom: 2rem;
+.inline-alert p {
+  margin: 0;
+}
+
+.insights-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.insight-metric-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 138px;
+}
+
+.insight-metric-card::after {
+  content: "";
+  position: absolute;
+  right: 1.2rem;
+  bottom: 1rem;
+  width: 46px;
+  height: 64px;
+  border-left: 8px solid rgba(199, 91, 51, 0.45);
+  border-radius: var(--radius-xs);
+  background: rgba(44, 74, 62, 0.08);
+  transform: rotate(5deg);
+}
+
+.metric-label {
+  display: block;
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  margin: 0.45rem 0 0;
+  color: var(--primary-green);
+  font-family: var(--font-serif);
+  font-size: clamp(2.2rem, 5vw, 3.2rem);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.insights-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 1rem;
 }
 
 .chart-card {
-    flex: 1;
-    background: white;
-    padding: 2rem;
-    border-radius: 4px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  min-width: 0;
 }
 
 .chart-card h3 {
-    font-family: Georgia, serif;
-    font-size: 1.2rem;
-    margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
-.chart-wrapper {
-    height: 300px;
-    position: relative; /* Pentru a centra numărul în Donut Chart */
+.chart-frame {
+  width: 100%;
+  height: 320px;
 }
 
-.donut-center-text {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 3rem;
-    font-family: Georgia, serif;
-    color: var(--text-dark);
-    pointer-events: none; /* Ca să nu blocheze hover-ul pe grafic */
+.empty-chart-state {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--text-gray);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  text-align: center;
 }
 
-/* Stiluri Top Surse */
-.top-sources-card {
-    background: white;
-    padding: 2rem;
-    border-radius: 4px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+.recharts-wrapper,
+.recharts-surface {
+  overflow: visible;
 }
 
-.top-sources-card h3 {
-    font-family: Georgia, serif;
-    margin-bottom: 1.5rem;
-}
+@media (max-width: 760px) {
+  .insights-summary-grid {
+    grid-template-columns: 1fr;
+  }
 
-.sources-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.source-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: var(--bg-color);
-    padding: 1rem 1.5rem;
-    border-radius: 4px;
-}
-
-.source-info {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-}
-
-.source-rank {
-    font-family: Georgia, serif;
-    font-size: 1.2rem;
-    color: var(--text-gray);
-    font-weight: bold;
-}
-
-.source-name {
-    font-weight: 500;
-}
-
-.source-score {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.numeric-score {
-    font-weight: bold;
-    color: var(--text-dark);
+  .chart-frame,
+  .empty-chart-state {
+    height: 280px;
+    min-height: 280px;
+  }
 }

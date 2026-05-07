@@ -1,4 +1,5 @@
 from collections import Counter
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.models.quote_card_model import QuoteCard
@@ -20,6 +21,9 @@ class QuoteCardService:
     ) -> None:
         self.quote_repository = quote_repository
         self.book_repository = book_repository
+
+    def _now(self) -> datetime:
+        return datetime.now(timezone.utc)
 
     def list_quotes_by_book(
         self,
@@ -43,17 +47,21 @@ class QuoteCardService:
         if book is None:
             return None
 
+        now = self._now()
         quote = QuoteCard(
             user_id=user_id,
             id=str(uuid4()),
             book_id=book_id,
-            text=payload.text,
+            quote=payload.quote,
             note=payload.note,
-            tag=payload.tag,
+            relationship_label=payload.relationship_label,
+            position_x=payload.position_x,
+            position_y=payload.position_y,
+            created_at=now,
+            updated_at=now,
         )
 
-        created = self.quote_repository.create(quote)
-        return QuoteCardResponse.model_validate(created)
+        return QuoteCardResponse.model_validate(self.quote_repository.create(quote))
 
     def update_quote(
         self,
@@ -69,16 +77,29 @@ class QuoteCardService:
             user_id=existing_quote.user_id,
             id=existing_quote.id,
             book_id=existing_quote.book_id,
-            text=payload.text if payload.text is not None else existing_quote.text,
+            quote=payload.quote if payload.quote is not None else existing_quote.quote,
             note=payload.note if payload.note is not None else existing_quote.note,
-            tag=payload.tag if payload.tag is not None else existing_quote.tag,
+            relationship_label=(
+                payload.relationship_label
+                if payload.relationship_label is not None
+                else existing_quote.relationship_label
+            ),
+            position_x=(
+                payload.position_x
+                if payload.position_x is not None
+                else existing_quote.position_x
+            ),
+            position_y=(
+                payload.position_y
+                if payload.position_y is not None
+                else existing_quote.position_y
+            ),
+            created_at=existing_quote.created_at,
+            updated_at=self._now(),
         )
 
         saved = self.quote_repository.update(user_id, quote_id, updated_quote)
-        if saved is None:
-            return None
-
-        return QuoteCardResponse.model_validate(saved)
+        return QuoteCardResponse.model_validate(saved) if saved else None
 
     def delete_quote(self, user_id: str, quote_id: str) -> bool:
         return self.quote_repository.delete(user_id, quote_id)
@@ -89,13 +110,17 @@ class QuoteCardService:
     def get_quote_stats(self, user_id: str) -> QuoteStatsResponse:
         quotes = self.quote_repository.list_all(user_id)
 
-        book_counter = Counter(quote.book_id for quote in quotes)
-        tag_counter = Counter(
-            quote.tag for quote in quotes if quote.tag is not None
+        book_titles = {
+            book.id: book.title
+            for book in self.book_repository.list_all(user_id)
+        }
+        book_counter = Counter(book_titles.get(quote.book_id, quote.book_id) for quote in quotes)
+        relationship_counter = Counter(
+            quote.relationship_label for quote in quotes if quote.relationship_label is not None
         )
 
         return QuoteStatsResponse(
             total_quotes=len(quotes),
             quotes_by_book=dict(sorted(book_counter.items())),
-            quotes_by_tag=dict(sorted(tag_counter.items())),
+            quotes_by_relationship=dict(sorted(relationship_counter.items())),
         )

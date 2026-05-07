@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   BarChart,
   Bar,
@@ -18,10 +20,33 @@ import useBooksOfflineSync from "../hooks/useBooksOfflineSync";
 import useBooksRealtime from "../hooks/useBooksRealtime";
 import { getBooksChangedEventName } from "../utils/localBooksStore";
 import "./Library.css";
+import "./Insights.css";
 
-const PIE_COLORS = ["#10b981", "#f59e0b", "#6366f1", "#ef4444", "#8b5cf6"];
+const PIE_COLORS = ["#2c4a3e", "#c75b33", "#d9a441", "#8f3f38", "#5f7f6f"];
+
+function InsightsLoading() {
+  return (
+    <div className="library-container insights-page">
+      <header className="library-header page-header">
+        <div>
+          <span className="section-kicker">Reading patterns</span>
+          <h1>Loading insights</h1>
+        </div>
+      </header>
+      <div className="loading-state" role="status">
+        <p>Loading statistics...</p>
+        <div className="insights-summary-grid" aria-hidden="true">
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function InsightsPage() {
+  const shouldReduceMotion = useReducedMotion();
   const [stats, setStats] = useState(null);
   const [quoteStats, setQuoteStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,15 +57,30 @@ export default function InsightsPage() {
       setLoading(true);
       setError("");
 
-      const [bookStats, nextQuoteStats] = await Promise.all([
-        getStats(),
-        getQuoteStats(),
-      ]);
+      const bookStats = await getStats();
+      let nextQuoteStats = null;
+
+      try {
+        nextQuoteStats = await getQuoteStats();
+      } catch {
+        nextQuoteStats = {
+          total_quotes: 0,
+          quotes_by_book: {},
+          quotes_by_relationship: {},
+        };
+        if (!navigator.onLine) {
+          setError("Insights will refresh when you are back online.");
+        }
+      }
 
       setStats(bookStats);
       setQuoteStats(nextQuoteStats);
     } catch (err) {
-      setError(err.message || "Failed to load stats.");
+      setError(
+        !navigator.onLine
+          ? "Insights will refresh when you are back online."
+          : err.message || "Failed to load stats."
+      );
     } finally {
       setLoading(false);
     }
@@ -50,6 +90,8 @@ export default function InsightsPage() {
     isOfflineMode,
     offlineQueueCount,
     isSyncingQueue,
+    connectionMessage,
+    queueText,
   } = useBooksOfflineSync(loadAllStats);
 
   const { isRealtimeConnected } = useBooksRealtime(
@@ -58,7 +100,8 @@ export default function InsightsPage() {
         if (
           event.type === "book_created" ||
           event.type === "book_updated" ||
-          event.type === "book_deleted"
+          event.type === "book_deleted" ||
+          event.type === "ws_reconnected"
         ) {
           loadAllStats();
         }
@@ -66,6 +109,17 @@ export default function InsightsPage() {
       [loadAllStats]
     )
   );
+
+  const realtimeNeedsAttention = navigator.onLine && !isRealtimeConnected;
+  const authSyncRequired = (connectionMessage || "").includes("in-memory session expired");
+  const showConnectionBanner =
+    !navigator.onLine ||
+    isOfflineMode ||
+    offlineQueueCount > 0 ||
+    isSyncingQueue ||
+    authSyncRequired ||
+    ["Server unreachable", "Syncing...", "Sync failed", "Synced successfully"].includes(connectionMessage) ||
+    realtimeNeedsAttention;
 
   useEffect(() => {
     loadAllStats();
@@ -83,14 +137,6 @@ export default function InsightsPage() {
     };
   }, [loadAllStats]);
 
-  const statusData = useMemo(() => {
-    if (!stats) return [];
-    return Object.entries(stats.books_by_status).map(([name, value]) => ({
-      name,
-      value,
-    }));
-  }, [stats]);
-
   const genreData = useMemo(() => {
     if (!stats) return [];
     return Object.entries(stats.books_by_genre).map(([name, value]) => ({
@@ -99,25 +145,37 @@ export default function InsightsPage() {
     }));
   }, [stats]);
 
-  const quoteTagData = useMemo(() => {
+  const sourceData = useMemo(() => {
+    if (!stats) return [];
+    return Object.entries(stats.books_by_source).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  }, [stats]);
+
+  const monthlyData = useMemo(() => {
+    if (!stats) return [];
+    return Object.entries(stats.books_by_month).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  }, [stats]);
+
+  const quoteRelationshipData = useMemo(() => {
     if (!quoteStats) return [];
-    return Object.entries(quoteStats.quotes_by_tag).map(([name, value]) => ({
+    return Object.entries(quoteStats.quotes_by_relationship).map(([name, value]) => ({
       name,
       value,
     }));
   }, [quoteStats]);
 
   if (loading) {
-    return (
-      <div className="library-container">
-        <p>Loading statistics...</p>
-      </div>
-    );
+    return <InsightsLoading />;
   }
 
-  if (error) {
+  if (error && !stats) {
     return (
-      <div className="library-container">
+      <div className="library-container insights-page">
         <p className="error-text">{error}</p>
       </div>
     );
@@ -125,146 +183,128 @@ export default function InsightsPage() {
 
   if (!stats || !quoteStats) {
     return (
-      <div className="library-container">
+      <div className="library-container insights-page">
         <p>No statistics available.</p>
       </div>
     );
   }
 
+  const metricCards = [
+    { label: "Total Books", value: stats.total_books },
+    { label: "Average Rating", value: stats.average_rating ?? "N/A" },
+    { label: "Total Quote Cards", value: quoteStats.total_quotes },
+  ];
+  const reveal = shouldReduceMotion ? {} : { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } };
+
   return (
-    <div className="library-container">
-      <header className="library-header">
-        <h1>Reading Insights</h1>
+    <div className="library-container insights-page">
+      <header className="library-header page-header">
+        <div>
+          <span className="section-kicker">Reading patterns</span>
+          <h1>Reading Insights</h1>
+          <p className="page-subtitle">
+            A quick pulse on sources, genres, reading momentum, and quote relationships.
+          </p>
+        </div>
       </header>
 
-      <div
-        className="review-card"
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h3 style={{ marginBottom: "0.5rem" }}>Realtime updates</h3>
-          <p style={{ margin: 0, color: "var(--text-gray)" }}>
-            WebSocket status:{" "}
-            <strong>{isRealtimeConnected ? "Connected" : "Disconnected"}</strong>
-          </p>
-        </div>
-      </div>
-
-      {(isOfflineMode || offlineQueueCount > 0 || isSyncingQueue) && (
-        <div
-          className="review-card"
-          style={{
-            marginBottom: "1.5rem",
-            background: "#fff7ed",
-            border: "1px solid #fdba74",
-          }}
-        >
-          <h3 style={{ marginBottom: "0.75rem" }}>
-            {isSyncingQueue
-              ? "Synchronizing offline changes..."
-              : isOfflineMode
-              ? "Offline mode active"
-              : "Pending changes waiting to sync"}
-          </h3>
-
-          <p style={{ margin: 0, color: "var(--text-gray)" }}>
-            {isOfflineMode
-              ? "Book charts are currently rendered from locally cached books. Quote stats remain online-backed."
-              : "The app is online again and queued changes are being synchronized."}
-          </p>
-
-          <p style={{ margin: "0.75rem 0 0 0", fontWeight: "bold" }}>
-            Queued operations: {offlineQueueCount}
-          </p>
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "1.5rem",
-          marginBottom: "2rem",
-        }}
-      >
-        <div className="review-card">
-          <h3>Total Books</h3>
-          <p
-            style={{
-              fontSize: "2.2rem",
-              fontWeight: "bold",
-              margin: "0.5rem 0 0 0",
-            }}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            className="review-card inline-alert"
+            role="status"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
           >
-            {stats.total_books}
-          </p>
-        </div>
+            <p className="author-text">{error}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        <div className="review-card">
-          <h3>Average Rating</h3>
-          <p
-            style={{
-              fontSize: "2.2rem",
-              fontWeight: "bold",
-              margin: "0.5rem 0 0 0",
-            }}
+      <AnimatePresence>
+        {showConnectionBanner && (
+          <motion.div
+            className={`review-card connection-banner ${isSyncingQueue ? "syncing" : ""}`}
+            role="status"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
           >
-            {stats.average_rating ?? "N/A"}
-          </p>
-        </div>
+            <h3>
+              {!navigator.onLine
+                ? "Offline mode active"
+                : authSyncRequired
+                  ? "Sync paused: re-authentication required"
+                  : realtimeNeedsAttention
+                    ? "Realtime updates disconnected, retrying..."
+                    : offlineQueueCount > 0
+                      ? queueText || `${offlineQueueCount} changes queued`
+                      : connectionMessage}
+            </h3>
 
-        <div className="review-card">
-          <h3>Total Quote Cards</h3>
-          <p
-            style={{
-              fontSize: "2.2rem",
-              fontWeight: "bold",
-              margin: "0.5rem 0 0 0",
-            }}
+            <p>
+              {!navigator.onLine || isOfflineMode
+                ? "Offline mode active. Changes will sync when the server is reachable."
+                : authSyncRequired
+                  ? "Your cached insights remain visible. Re-authenticate to sync queued offline changes."
+                  : realtimeNeedsAttention
+                    ? "Live updates are reconnecting in the background."
+                    : isSyncingQueue
+                      ? "The app is online again and queued changes are being synchronized."
+                      : "Insights will refresh from the canonical server state."}
+            </p>
+
+            {(queueText || offlineQueueCount > 0) && (
+              <p style={{ marginTop: "0.75rem", fontWeight: "bold" }}>
+                {queueText || `Queued operations: ${offlineQueueCount}`}
+              </p>
+            )}
+
+            {authSyncRequired && (
+              <div className="recovery-actions">
+                <Link className="view-details-btn" to="/login">
+                  Log in to sync
+                </Link>
+                <Link className="scrape-submit-btn" to="/register">
+                  Re-register account
+                </Link>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div className="insights-summary-grid" {...(shouldReduceMotion ? {} : { initial: "hidden", animate: "visible" })}>
+        {metricCards.map((metric, index) => (
+          <motion.section
+            key={metric.label}
+            className="review-card insight-metric-card"
+            variants={shouldReduceMotion ? undefined : { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}
+            transition={{ duration: 0.22, delay: index * 0.04 }}
           >
-            {quoteStats.total_quotes}
-          </p>
-        </div>
-      </div>
+            <span className="metric-label">{metric.label}</span>
+            <p className="metric-value">{metric.value}</p>
+          </motion.section>
+        ))}
+      </motion.div>
 
       {stats.total_books === 0 ? (
-        <div className="review-card">
+        <motion.div className="review-card empty-state" {...reveal} transition={{ duration: 0.24 }}>
           <h3>No data yet</h3>
-          <p style={{ color: "var(--text-gray)" }}>
-            Add books and quote cards to see statistics here.
-          </p>
-        </div>
+          <p>Add books and quote cards to see statistics here.</p>
+        </motion.div>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-            gap: "1.5rem",
-          }}
-        >
-          <div className="review-card">
-            <h3>Books by Status</h3>
-            <div style={{ width: "100%", height: 320 }}>
+        <div className="insights-charts-grid">
+          <motion.section className="review-card chart-card" {...reveal} transition={{ duration: 0.24 }}>
+            <h3>Books by Source</h3>
+            <div className="chart-frame">
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie
-                    data={statusData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={100}
-                    label
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={PIE_COLORS[index % PIE_COLORS.length]}
-                      />
+                  <Pie data={sourceData} dataKey="value" nameKey="name" outerRadius={100} label>
+                    {sourceData.map((entry, index) => (
+                      <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -272,45 +312,59 @@ export default function InsightsPage() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </motion.section>
 
-          <div className="review-card">
+          <motion.section className="review-card chart-card" {...reveal} transition={{ duration: 0.24, delay: 0.04 }}>
             <h3>Books by Genre</h3>
-            <div style={{ width: "100%", height: 320 }}>
+            <div className="chart-frame">
               <ResponsiveContainer>
                 <BarChart data={genreData}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(102, 115, 107, 0.22)" />
                   <XAxis dataKey="name" angle={-20} textAnchor="end" height={70} />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="value" name="Books" fill="#10b981" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="value" name="Books" fill="#2c4a3e" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </motion.section>
 
-          <div className="review-card">
-            <h3>Quote Cards by Tag</h3>
-            {quoteTagData.length === 0 ? (
-              <p style={{ color: "var(--text-gray)" }}>
-                No tagged quote cards yet.
-              </p>
+          <motion.section className="review-card chart-card" {...reveal} transition={{ duration: 0.24, delay: 0.08 }}>
+            <h3>Books by Month</h3>
+            <div className="chart-frame">
+              <ResponsiveContainer>
+                <BarChart data={monthlyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(102, 115, 107, 0.22)" />
+                  <XAxis dataKey="name" angle={-20} textAnchor="end" height={70} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="value" name="Books" fill="#c75b33" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.section>
+
+          <motion.section className="review-card chart-card" {...reveal} transition={{ duration: 0.24, delay: 0.12 }}>
+            <h3>Quote Cards by Relationship</h3>
+            {quoteRelationshipData.length === 0 ? (
+              <p className="empty-chart-state">No connected quote cards yet.</p>
             ) : (
-              <div style={{ width: "100%", height: 320 }}>
+              <div className="chart-frame">
                 <ResponsiveContainer>
-                  <BarChart data={quoteTagData}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                  <BarChart data={quoteRelationshipData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(102, 115, 107, 0.22)" />
                     <XAxis dataKey="name" angle={-20} textAnchor="end" height={70} />
                     <YAxis allowDecimals={false} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="value" name="Quotes" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="value" name="Quotes" fill="#8f3f38" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
-          </div>
+          </motion.section>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import session_repository, user_repository
+from app.dependencies import book_repository, quote_card_repository, session_repository, user_repository
 from app.main import app
 
 client = TestClient(app)
@@ -11,9 +11,13 @@ client = TestClient(app)
 def clear_auth_repositories():
     user_repository.clear()
     session_repository.clear()
+    book_repository.clear()
+    quote_card_repository.clear()
     yield
     user_repository.clear()
     session_repository.clear()
+    book_repository.clear()
+    quote_card_repository.clear()
 
 
 def test_register_success():
@@ -149,3 +153,18 @@ def test_logout_success():
     )
 
     assert me_response.status_code == 401
+
+
+def test_auth_requires_valid_bearer_header():
+    assert client.get("/auth/me").status_code == 401
+    assert client.get("/auth/me", headers={"Authorization": "Token abc"}).status_code == 401
+    assert client.get("/auth/me", headers={"Authorization": "Bearer "}).status_code == 401
+
+
+def test_logout_rejects_expired_session_token():
+    response = client.post(
+        "/auth/logout",
+        headers={"Authorization": "Bearer missing-token"},
+    )
+
+    assert response.status_code == 401

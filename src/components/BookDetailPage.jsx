@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { deleteBook, getBookById, updateBook } from "../api/booksApi";
 import { createQuote, deleteQuote, getQuotesByBook, updateQuote } from "../api/quotesApi";
 import useBooksOfflineSync from "../hooks/useBooksOfflineSync";
@@ -30,9 +31,24 @@ function validateBook(form) {
   return errors;
 }
 
+function DetailLoading() {
+  return (
+    <div className="library-container">
+      <div className="loading-state" role="status">
+        <p>Loading book...</p>
+        <div className="skeleton-stack" aria-hidden="true">
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BookDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const shouldReduceMotion = useReducedMotion();
   const [book, setBook] = useState(null);
   const [quotes, setQuotes] = useState([]);
   const [form, setForm] = useState({
@@ -56,6 +72,8 @@ export default function BookDetailPage() {
   const [quoteSaving, setQuoteSaving] = useState(false);
   const [error, setError] = useState("");
   const [quoteError, setQuoteError] = useState("");
+  const [saveNotice, setSaveNotice] = useState("");
+  const [quoteNotice, setQuoteNotice] = useState("");
 
   const loadBook = useCallback(async () => {
     try {
@@ -98,8 +116,15 @@ export default function BookDetailPage() {
     await Promise.all([loadBook(), loadQuotes()]);
   }, [loadBook, loadQuotes]);
 
-  const { isOfflineMode, offlineQueueCount, isSyncingQueue, connectionMessage, queueText } = useBooksOfflineSync(refreshAll);
-  const { isRealtimeConnected, realtimeMessage } = useBooksRealtime(
+  const {
+    isOfflineMode,
+    offlineQueueCount,
+    isSyncingQueue,
+    connectionMessage,
+    queueText,
+  } = useBooksOfflineSync(refreshAll);
+
+  const { isRealtimeConnected } = useBooksRealtime(
     useCallback(
       (event) => {
         if (event.type === "book_updated" && event.book?.id === id) loadBook();
@@ -116,11 +141,13 @@ export default function BookDetailPage() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
+    setSaveNotice("");
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleQuoteChange = (event) => {
     const { name, value } = event.target;
+    setQuoteNotice("");
     setQuoteForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -132,6 +159,7 @@ export default function BookDetailPage() {
     try {
       setSaving(true);
       setError("");
+      setSaveNotice("");
       const updated = await updateBook(id, {
         title: form.title.trim(),
         author: form.author.trim(),
@@ -145,6 +173,7 @@ export default function BookDetailPage() {
         cover_url: form.cover_url.trim() || null,
       });
       setBook(updated);
+      setSaveNotice("Changes saved.");
     } catch (err) {
       setError(err.message || "Failed to update book.");
     } finally {
@@ -161,6 +190,7 @@ export default function BookDetailPage() {
   const resetQuoteForm = () => {
     setQuoteForm(initialQuoteForm);
     setEditingQuoteId(null);
+    setQuoteNotice("");
   };
 
   const handleQuoteSubmit = async () => {
@@ -172,6 +202,7 @@ export default function BookDetailPage() {
     try {
       setQuoteSaving(true);
       setQuoteError("");
+      setQuoteNotice("");
       const payload = {
         quote: quoteForm.quote.trim(),
         note: quoteForm.note.trim() || null,
@@ -184,6 +215,7 @@ export default function BookDetailPage() {
       }
       await loadQuotes();
       resetQuoteForm();
+      setQuoteNotice(editingQuoteId ? "Quote updated." : "Quote card created.");
     } catch (err) {
       setQuoteError(err.message || "Failed to save quote card.");
     } finally {
@@ -193,6 +225,7 @@ export default function BookDetailPage() {
 
   const handleEditQuote = (quote) => {
     setEditingQuoteId(quote.id);
+    setQuoteNotice("");
     setQuoteForm({
       quote: quote.quote,
       note: quote.note || "",
@@ -207,7 +240,7 @@ export default function BookDetailPage() {
     if (editingQuoteId === quoteId) resetQuoteForm();
   };
 
-  if (loading) return <div className="library-container"><p>Loading book...</p></div>;
+  if (loading) return <DetailLoading />;
   if (error && !book) {
     return (
       <div className="library-container">
@@ -218,39 +251,86 @@ export default function BookDetailPage() {
   }
   if (!book) return <div className="library-container"><h2>Book not found.</h2></div>;
 
+  const realtimeNeedsAttention = navigator.onLine && !isRealtimeConnected;
+  const authSyncRequired = (connectionMessage || "").includes("in-memory session expired");
+  const showConnectionBanner =
+    !navigator.onLine ||
+    isOfflineMode ||
+    offlineQueueCount > 0 ||
+    isSyncingQueue ||
+    authSyncRequired ||
+    realtimeNeedsAttention ||
+    ["Server unreachable", "Syncing...", "Sync failed", "Synced successfully"].includes(connectionMessage);
+  const cardMotion = shouldReduceMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 14 },
+        animate: { opacity: 1, y: 0 },
+      };
+
   return (
     <div className="library-container detail-page">
       <Link to="/library" className="back-link">Back to Library</Link>
 
-      <div className="review-card" style={{ marginBottom: "1.5rem" }}>
-        <strong>{!navigator.onLine ? "Offline mode active" : connectionMessage}</strong>
-        <p className="author-text">
-          {navigator.onLine && isRealtimeConnected
-            ? realtimeMessage
-            : "Realtime updates disconnected, retrying..."}
-        </p>
-        {(isOfflineMode || offlineQueueCount > 0 || isSyncingQueue) && (
-          <p className="author-text">
-            {isSyncingQueue ? "Syncing..." : queueText || "Offline changes are queued"}
-          </p>
+      <AnimatePresence>
+        {showConnectionBanner && (
+          <motion.div
+            className={`review-card connection-banner detail-connection-banner ${isSyncingQueue ? "syncing" : ""}`}
+            role="status"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h3>
+              {!navigator.onLine
+                ? "Offline mode active"
+                : authSyncRequired
+                  ? "Sync paused: re-authentication required"
+                  : realtimeNeedsAttention
+                    ? "Realtime updates disconnected, retrying..."
+                    : offlineQueueCount > 0
+                      ? queueText || `${offlineQueueCount} changes queued`
+                      : connectionMessage}
+            </h3>
+            <p>
+              {isSyncingQueue
+                ? "Queued changes are being synchronized."
+                : authSyncRequired
+                  ? "Your offline queue is preserved. Re-authenticate to sync queued changes."
+                  : !navigator.onLine || isOfflineMode
+                    ? "Book edits and quote cards will sync when BookScape reconnects."
+                    : realtimeNeedsAttention
+                      ? "Live updates are reconnecting in the background."
+                      : "Your queued changes are now reflected here."}
+            </p>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
       <div className="detail-cards-layout">
-        <div className="book-info-card">
+        <motion.section
+          className="book-info-card detail-summary-card"
+          {...cardMotion}
+          transition={{ duration: 0.24 }}
+        >
           {book.cover_url ? (
             <img src={book.cover_url} alt={book.title} className="detail-cover-large" />
           ) : (
-            <div className="detail-cover-large"></div>
+            <div className="detail-cover-large" aria-hidden="true" />
           )}
           <div className="detail-text-content">
+            <span className="section-kicker">Book details</span>
             <h1>{book.title}</h1>
-            <p className="detail-author">by {book.author}{book._offline ? " - pending sync" : ""}</p>
+            <p className="detail-author">
+              by {book.author}
+              {book._offline && <span className="pending-chip">pending sync</span>}
+            </p>
             <div className="detail-meta">
-              <span>Publication Year: {book.publication_year}</span>
+              <span className="meta-pill">Publication Year: {book.publication_year}</span>
               <span className="genre-badge">{book.genre}</span>
-              <span>Source: {book.source}</span>
-              <span>Rating: {"*".repeat(book.rating)}{"-".repeat(5 - book.rating)}</span>
+              <span className="meta-pill">Source: {book.source}</span>
+              <span className="meta-pill">Rating: {"*".repeat(book.rating)}{"-".repeat(5 - book.rating)}</span>
             </div>
             <div className="synopsis-section">
               <h4>Synopsis</h4>
@@ -259,72 +339,142 @@ export default function BookDetailPage() {
               <p>{book.review || "No review yet."}</p>
             </div>
           </div>
-        </div>
+        </motion.section>
 
-        <div className="review-card">
+        <motion.section className="review-card" {...cardMotion} transition={{ duration: 0.24, delay: 0.04 }}>
           <h3>Edit Book</h3>
-          <div className="modal-body">
-            <input name="title" placeholder="Title" value={form.title} onChange={handleChange} />
-            {formErrors.title && <p className="error-text">{formErrors.title}</p>}
-            <input name="author" placeholder="Author" value={form.author} onChange={handleChange} />
-            <input name="genre" placeholder="Genre" value={form.genre} onChange={handleChange} />
-            <input name="publication_year" type="number" placeholder="Publication year" value={form.publication_year} onChange={handleChange} />
-            {formErrors.publication_year && <p className="error-text">{formErrors.publication_year}</p>}
-            <input name="source" placeholder="Source" value={form.source} onChange={handleChange} />
-            <input name="source_url" placeholder="Source URL" value={form.source_url} onChange={handleChange} />
-            {formErrors.source_url && <p className="error-text">{formErrors.source_url}</p>}
-            <textarea name="synopsis" className="review-textarea" placeholder="Synopsis" value={form.synopsis} onChange={handleChange} />
-            <textarea name="review" className="review-textarea" placeholder="Your review" value={form.review} onChange={handleChange} />
-            <input name="rating" type="number" min="0" max="5" value={form.rating} onChange={handleChange} />
-            {formErrors.rating && <p className="error-text">{formErrors.rating}</p>}
-            <input name="cover_url" placeholder="Cover URL" value={form.cover_url} onChange={handleChange} />
-            {formErrors.cover_url && <p className="error-text">{formErrors.cover_url}</p>}
-            {error && <p className="error-text">{error}</p>}
+          <div className="detail-form-grid">
+            <label className="field-group">
+              <span className="field-label">Title</span>
+              <input name="title" placeholder="Title" value={form.title} onChange={handleChange} aria-invalid={Boolean(formErrors.title)} />
+            </label>
+            {formErrors.title && <p className="error-text full-span">{formErrors.title}</p>}
+            <label className="field-group">
+              <span className="field-label">Author</span>
+              <input name="author" placeholder="Author" value={form.author} onChange={handleChange} aria-invalid={Boolean(formErrors.author)} />
+            </label>
+            <label className="field-group">
+              <span className="field-label">Genre</span>
+              <input name="genre" placeholder="Genre" value={form.genre} onChange={handleChange} aria-invalid={Boolean(formErrors.genre)} />
+            </label>
+            <label className="field-group">
+              <span className="field-label">Publication year</span>
+              <input name="publication_year" type="number" placeholder="Publication year" value={form.publication_year} onChange={handleChange} aria-invalid={Boolean(formErrors.publication_year)} />
+            </label>
+            <label className="field-group">
+              <span className="field-label">Source</span>
+              <input name="source" placeholder="Source" value={form.source} onChange={handleChange} />
+            </label>
+            {formErrors.publication_year && <p className="error-text full-span">{formErrors.publication_year}</p>}
+            <label className="field-group full-span">
+              <span className="field-label">Source URL</span>
+              <input name="source_url" placeholder="Source URL" value={form.source_url} onChange={handleChange} aria-invalid={Boolean(formErrors.source_url)} />
+            </label>
+            {formErrors.source_url && <p className="error-text full-span">{formErrors.source_url}</p>}
+            <label className="field-group full-span">
+              <span className="field-label">Synopsis</span>
+              <textarea name="synopsis" className="review-textarea" placeholder="Synopsis" value={form.synopsis} onChange={handleChange} />
+            </label>
+            <label className="field-group full-span">
+              <span className="field-label">Your review</span>
+              <textarea name="review" className="review-textarea" placeholder="Your review" value={form.review} onChange={handleChange} />
+            </label>
+            <label className="field-group">
+              <span className="field-label">Rating</span>
+              <input name="rating" type="number" min="0" max="5" value={form.rating} onChange={handleChange} aria-invalid={Boolean(formErrors.rating)} />
+            </label>
+            <label className="field-group">
+              <span className="field-label">Cover URL</span>
+              <input name="cover_url" placeholder="Cover URL" value={form.cover_url} onChange={handleChange} aria-invalid={Boolean(formErrors.cover_url)} />
+            </label>
+            {formErrors.rating && <p className="error-text full-span">{formErrors.rating}</p>}
+            {formErrors.cover_url && <p className="error-text full-span">{formErrors.cover_url}</p>}
+            {error && <p className="error-text full-span">{error}</p>}
           </div>
           <div className="review-actions">
-            <button onClick={handleDelete} className="text-delete-btn">Delete Book</button>
-            <button onClick={handleSave} className="scrape-submit-btn" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
+            <button onClick={handleDelete} className="text-delete-btn" type="button">Delete Book</button>
+            <div className="review-actions" style={{ marginTop: 0 }}>
+              <AnimatePresence>
+                {saveNotice && (
+                  <motion.span
+                    className="save-state"
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    {saveNotice}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+              <button onClick={handleSave} className="scrape-submit-btn" disabled={saving} type="button">
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
           </div>
-        </div>
+        </motion.section>
 
-        <div className="review-card">
+        <motion.section className="review-card" {...cardMotion} transition={{ duration: 0.24, delay: 0.08 }}>
           <h3>{editingQuoteId ? "Edit Quote Card" : "Add Quote Card"}</h3>
-          <div className="modal-body">
-            <textarea name="quote" className="review-textarea" placeholder="Quote text" value={quoteForm.quote} onChange={handleQuoteChange} />
-            <input name="note" placeholder="Optional note" value={quoteForm.note} onChange={handleQuoteChange} />
-            <input name="relationship_label" placeholder="Relationship label" value={quoteForm.relationship_label} onChange={handleQuoteChange} />
-            {quoteError && <p className="error-text">{quoteError}</p>}
+          <div className="detail-form-grid">
+            <label className="field-group full-span">
+              <span className="field-label">Quote text</span>
+              <textarea name="quote" className="review-textarea" placeholder="Quote text" value={quoteForm.quote} onChange={handleQuoteChange} />
+            </label>
+            <label className="field-group">
+              <span className="field-label">Optional note</span>
+              <input name="note" placeholder="Optional note" value={quoteForm.note} onChange={handleQuoteChange} />
+            </label>
+            <label className="field-group">
+              <span className="field-label">Relationship label</span>
+              <input name="relationship_label" placeholder="Relationship label" value={quoteForm.relationship_label} onChange={handleQuoteChange} />
+            </label>
+            {quoteError && <p className="error-text full-span">{quoteError}</p>}
           </div>
           <div className="review-actions">
-            <button onClick={resetQuoteForm} className="cancel-btn" disabled={quoteSaving}>Clear</button>
-            <button onClick={handleQuoteSubmit} className="scrape-submit-btn" disabled={quoteSaving}>
-              {quoteSaving ? "Saving..." : editingQuoteId ? "Update Quote" : "Create Quote"}
-            </button>
+            <button onClick={resetQuoteForm} className="cancel-btn" disabled={quoteSaving} type="button">Clear</button>
+            <div className="review-actions" style={{ marginTop: 0 }}>
+              <AnimatePresence>
+                {quoteNotice && (
+                  <motion.span className="save-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    {quoteNotice}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+              <button onClick={handleQuoteSubmit} className="scrape-submit-btn" disabled={quoteSaving} type="button">
+                {quoteSaving ? "Saving..." : editingQuoteId ? "Update Quote" : "Create Quote"}
+              </button>
+            </div>
           </div>
-        </div>
+        </motion.section>
 
-        <div className="review-card">
+        <motion.section className="review-card detail-summary-card" {...cardMotion} transition={{ duration: 0.24, delay: 0.12 }}>
           <h3>Quote Cards</h3>
           {quotesLoading ? <p>Loading quote cards...</p> : quotes.length === 0 ? (
             <p className="author-text">No quote cards yet for this book.</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div className="quote-card-list">
               {quotes.map((quote) => (
-                <div key={quote.id} style={{ border: "1px solid var(--border-color)", borderRadius: "8px", padding: "1rem", background: "#fafafa" }}>
-                  <p style={{ margin: "0 0 0.75rem 0", lineHeight: 1.6 }}>"{quote.quote}"</p>
-                  {quote.note && <span className="genre-badge">Note: {quote.note}</span>}
-                  {quote.relationship_label && <span className="genre-badge">Link: {quote.relationship_label}</span>}
-                  <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem" }}>
-                    <button className="cancel-btn" onClick={() => handleEditQuote(quote)}>Edit</button>
-                    <button className="text-delete-btn" onClick={() => handleDeleteQuote(quote.id)}>Delete</button>
+                <motion.article
+                  key={quote.id}
+                  className="detail-quote-card"
+                  initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <blockquote>&quot;{quote.quote}&quot;</blockquote>
+                  <div className="quote-card-badges">
+                    {quote.note && <span className="genre-badge">Note: {quote.note}</span>}
+                    {quote.relationship_label && <span className="genre-badge">Link: {quote.relationship_label}</span>}
                   </div>
-                </div>
+                  <div className="quote-card-actions">
+                    <button className="cancel-btn" onClick={() => handleEditQuote(quote)} type="button">Edit</button>
+                    <button className="text-delete-btn" onClick={() => handleDeleteQuote(quote.id)} type="button">Delete</button>
+                  </div>
+                </motion.article>
               ))}
             </div>
           )}
-        </div>
+        </motion.section>
       </div>
     </div>
   );

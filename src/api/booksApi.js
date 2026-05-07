@@ -1,9 +1,11 @@
-import { getAuthToken } from "../utils/authStorage";
+import { getAuthToken, markAuthSessionExpired } from "../utils/authStorage";
 import {
   computeLocalBookStats,
   getLocalBookById,
+  getLocalBooksCache,
   getLocalPaginatedBooks,
-  mergeLocalBooks,
+  isPendingOptimisticBook,
+  reconcileServerBooks,
   removeLocalBook,
   upsertLocalBook,
 } from "../utils/localBooksStore";
@@ -30,7 +32,7 @@ class ApiUnavailableError extends Error {
 
 class AuthSessionExpiredError extends Error {
   constructor(
-    message = "Your in-memory server session expired after the backend restart. Please log in again to sync your offline changes."
+    message = "The backend restarted and your in-memory session expired. Please re-authenticate to sync your offline changes."
   ) {
     super(message);
     this.name = "AuthSessionExpiredError";
@@ -126,7 +128,9 @@ async function requestWithAuth(path, options = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new AuthSessionExpiredError();
+      const error = new AuthSessionExpiredError();
+      markAuthSessionExpired(error.message);
+      throw error;
     }
 
     if ([502, 503, 504].includes(response.status)) {
@@ -147,7 +151,9 @@ async function requestWithAuth(path, options = {}) {
     if (!response.ok) {
       const message = extractErrorMessage(data);
       if (/invalid|expired|unauthorized|forbidden/i.test(message)) {
-        throw new AuthSessionExpiredError();
+        const error = new AuthSessionExpiredError();
+        markAuthSessionExpired(error.message);
+        throw error;
       }
       throw new Error(message);
     }
@@ -205,8 +211,19 @@ export async function getBooks(page = 1, pageSize = 10) {
       method: "GET",
     });
 
-    mergeLocalBooks(data.items);
-    return data;
+    reconcileServerBooks(data.items, { replaceCanonical: page === 1 });
+    const pendingCount = getLocalBooksCache().filter(isPendingOptimisticBook).length;
+    const displayPage = getLocalPaginatedBooks(page, pageSize);
+
+    return {
+      ...data,
+      items: displayPage.items,
+      total: Math.max(displayPage.total, data.total + pendingCount),
+      total_pages: Math.max(
+        displayPage.total_pages,
+        Math.ceil((data.total + pendingCount) / pageSize)
+      ),
+    };
   } catch (error) {
     if (!isApiUnavailableError(error) && !isAuthSessionExpiredError(error)) {
       throw error;
@@ -344,6 +361,16 @@ async function syncQueuedBookOperationsOnce() {
 
   if (!serverAvailable) {
     return { synced: false, count: queue.length };
+  }
+
+  if (!getAuthToken()) {
+    return {
+      synced: false,
+      count: queue.length,
+      authExpired: true,
+      message:
+        "The backend restarted and your in-memory session expired. Please re-authenticate to sync your offline changes.",
+    };
   }
 
   const syncBatchId = `sync-${Date.now()}-${Math.random().toString(16).slice(2)}`;

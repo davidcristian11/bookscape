@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import ReactFlow, { Background, Controls, Handle, Position, addEdge, applyEdgeChanges, applyNodeChanges } from "reactflow";
 import "reactflow/dist/style.css";
 import { getBooks } from "../api/booksApi";
@@ -8,16 +10,21 @@ import "./IdeaNexus.css";
 
 function QuoteCardNode({ data }) {
   return (
-    <div className="quote-card">
+    <motion.div
+      className="quote-card"
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
+    >
       <Handle type="target" position={Position.Top} className="custom-handle" />
       <div className="quote-meta">
-        <div className="mock-cover-small"></div>
+        <div className="mock-cover-small" aria-hidden="true" />
         <div className="quote-source">
           <span className="from-text">From:</span>
           <strong>{data.bookTitle}</strong>
         </div>
       </div>
-      <p className="quote-text">"{data.quote}"</p>
+      <p className="nexus-quote-text">&quot;{data.quote}&quot;</p>
       {data.relationshipLabel && <span className="genre-badge">{data.relationshipLabel}</span>}
       <div className="quote-actions">
         <button className="delete-node-btn" type="button" onClick={() => data.onDelete?.(data.id)}>
@@ -25,13 +32,14 @@ function QuoteCardNode({ data }) {
         </button>
       </div>
       <Handle type="source" position={Position.Bottom} className="custom-handle" />
-    </div>
+    </motion.div>
   );
 }
 
 const nodeTypes = { customQuote: QuoteCardNode };
 
 export default function IdeaNexus() {
+  const shouldReduceMotion = useReducedMotion();
   const [books, setBooks] = useState([]);
   const [quoteCards, setQuoteCards] = useState([]);
   const [nodes, setNodes] = useState([]);
@@ -196,19 +204,52 @@ export default function IdeaNexus() {
   };
 
   if (loading) {
-    return <div className="nexus-container"><div className="nexus-header"><h1>Idea Nexus</h1></div><p>Loading Idea Nexus...</p></div>;
+    return (
+      <div className="nexus-container">
+        <div className="nexus-header page-header">
+          <div>
+            <span className="section-kicker">Quote relationships</span>
+            <h1>Idea Nexus</h1>
+          </div>
+        </div>
+        <div className="nexus-loading-board" role="status">
+          <p>Loading Idea Nexus...</p>
+          <div className="skeleton-card" aria-hidden="true" />
+        </div>
+      </div>
+    );
   }
 
-  const showOfflineState = isOfflineMode || !navigator.onLine || Boolean(queueText);
+  const authSyncRequired =
+    (connectionMessage || "").includes("in-memory session expired") ||
+    (error || "").includes("in-memory session expired");
+  const showOfflineState = isOfflineMode || !navigator.onLine || Boolean(queueText) || authSyncRequired;
   const showServerError = Boolean(error) && !showOfflineState;
 
   return (
-    <div className="nexus-container">
-      <div className="nexus-header">
-        <h1>Idea Nexus</h1>
+    <motion.div
+      className="nexus-container"
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.24 }}
+    >
+      <div className="nexus-header page-header">
+        <div>
+          <span className="section-kicker">Quote relationships</span>
+          <h1>Idea Nexus</h1>
+          <p className="page-subtitle">
+            Arrange quote cards into a visual board of themes, links, and recurring ideas.
+          </p>
+        </div>
       </div>
 
-      <form className="nexus-form" onSubmit={handleAddQuoteCard}>
+      <motion.form
+        className="nexus-form"
+        onSubmit={handleAddQuoteCard}
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, delay: 0.04 }}
+      >
         <select name="book_id" value={form.book_id} onChange={handleChange} disabled={books.length === 0}>
           {books.length === 0 && <option value="">No books available</option>}
           {books.map((book) => <option key={book.id} value={book.id}>{book.title}</option>)}
@@ -216,43 +257,82 @@ export default function IdeaNexus() {
         <input name="quote" placeholder="Quote text" value={form.quote} onChange={handleChange} />
         <input name="relationship_label" placeholder="Relationship label" value={form.relationship_label} onChange={handleChange} />
         <input name="note" placeholder="Optional note" value={form.note} onChange={handleChange} />
-        <button className="add-quote-btn" type="submit">Add Quote Card</button>
-      </form>
+        <motion.button
+          className="add-quote-btn"
+          type="submit"
+          whileHover={shouldReduceMotion ? undefined : { y: -1 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          Add Quote Card
+        </motion.button>
+      </motion.form>
 
-      {showOfflineState && (
-        <div className="review-card connection-banner" role="status">
-          <h3 style={{ marginBottom: "0.75rem" }}>
-            {!navigator.onLine ? "Offline mode active" : connectionMessage}
-          </h3>
-          <p style={{ margin: 0, color: "var(--text-gray)" }}>
-            Idea Nexus will refresh when BookScape can reach the server again.
-          </p>
-          {queueText && (
-            <p style={{ margin: "0.75rem 0 0 0", fontWeight: "bold" }}>
-              {queueText}
-            </p>
-          )}
-          <button
-            className="cancel-btn"
-            type="button"
-            onClick={loadBoard}
-            style={{ marginTop: "1rem" }}
+      <AnimatePresence>
+        {showOfflineState && (
+          <motion.div
+            className="review-card connection-banner"
+            role="status"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
           >
-            Retry
-          </button>
-        </div>
-      )}
+            <h3>
+              {!navigator.onLine
+                ? "Offline mode active"
+                : authSyncRequired
+                  ? "Sync paused: re-authentication required"
+                  : connectionMessage}
+            </h3>
+            <p>
+              {authSyncRequired
+                ? "The backend restarted and the RAM-only session expired. Re-authenticate to sync queued offline changes."
+                : "Idea Nexus will refresh when BookScape can reach the server again."}
+            </p>
+            {queueText && (
+              <p style={{ marginTop: "0.75rem", fontWeight: "bold" }}>
+                {queueText}
+              </p>
+            )}
+            <button className="cancel-btn" type="button" onClick={loadBoard}>
+              Retry
+            </button>
+            {authSyncRequired && (
+              <div className="recovery-actions">
+                <Link className="view-details-btn" to="/login">
+                  Log in to sync
+                </Link>
+                <Link className="scrape-submit-btn" to="/register">
+                  Re-register account
+                </Link>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {showServerError && (
-        <div className="review-card" style={{ marginBottom: "1.5rem" }}>
-          <p className="error-text">{error}</p>
-          <button className="cancel-btn" type="button" onClick={loadBoard}>
-            Retry
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {showServerError && (
+          <motion.div
+            className="review-card nexus-error-card"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <p className="error-text">{error}</p>
+            <button className="cancel-btn" type="button" onClick={loadBoard}>
+              Retry
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="canvas-wrapper">
+      <div className={`canvas-wrapper ${nodes.length === 0 ? "is-empty" : ""}`}>
+        {nodes.length === 0 && !showServerError && (
+          <div className="nexus-empty-note">
+            <h3>No quote cards yet</h3>
+            <p>Create quote cards from a book detail page or add one above.</p>
+          </div>
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -262,11 +342,12 @@ export default function IdeaNexus() {
           onNodeDragStop={handleNodeDragStop}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.24 }}
         >
-          <Background color="#ccc" gap={20} variant="dots" />
+          <Background color="#cabca7" gap={22} variant="dots" />
           <Controls />
         </ReactFlow>
       </div>
-    </div>
+    </motion.div>
   );
 }

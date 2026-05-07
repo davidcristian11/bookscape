@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { scrapeBook } from "../api/booksApi";
 import "./Library.css";
 
@@ -28,6 +29,7 @@ function validateUrl(value) {
 }
 
 export default function ScrapeModal({ isOpen, onClose, onAddBook, onBookCreated }) {
+  const shouldReduceMotion = useReducedMotion();
   const [mode, setMode] = useState("scrape");
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState({});
@@ -45,8 +47,6 @@ export default function ScrapeModal({ isOpen, onClose, onAddBook, onBookCreated 
       setIsSubmitting(false);
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const validateManualBook = () => {
     const nextErrors = {};
@@ -74,8 +74,7 @@ export default function ScrapeModal({ isOpen, onClose, onAddBook, onBookCreated 
   const validateScrape = () => {
     if (!validateUrl(form.scrapeUrl.trim())) {
       return {
-        scrapeUrl:
-          "Enter a valid http or https book page URL.",
+        scrapeUrl: "Enter a valid http or https book page URL.",
       };
     }
     return {};
@@ -133,90 +132,119 @@ export default function ScrapeModal({ isOpen, onClose, onAddBook, onBookCreated 
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <div className="modal-header">
-          <h2>{mode === "scrape" ? "Scrape Book Data" : "Add Book Manually"}</h2>
-          <button className="close-btn" onClick={onClose} type="button">
-            x
-          </button>
-        </div>
-
-        <div className="view-toggle" style={{ margin: "0 1.5rem 1rem" }}>
-          <button
-            type="button"
-            className={`toggle-btn ${mode === "scrape" ? "active" : ""}`}
-            onClick={() => setMode("scrape")}
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="modal-overlay"
+          initial={shouldReduceMotion ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scrape-modal-title"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
           >
-            Scrape URL
-          </button>
-          <button
-            type="button"
-            className={`toggle-btn ${mode === "manual" ? "active" : ""}`}
-            onClick={() => setMode("manual")}
-          >
-            Manual
-          </button>
-        </div>
+            <div className="modal-header">
+              <div>
+                <span className="section-kicker">Add to shelf</span>
+                <h2 id="scrape-modal-title">
+                  {mode === "scrape" ? "Scrape Book Data" : "Add Book Manually"}
+                </h2>
+              </div>
+              <button className="close-btn" onClick={onClose} type="button" aria-label="Close modal">
+                &times;
+              </button>
+            </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            {mode === "scrape" ? (
-              <>
-                <p className="author-text">
-                  Supported sources: Goodreads, Amazon, Barnes & Noble, Open Library.
-                </p>
-                <input
-                  name="scrapeUrl"
-                  placeholder="https://www.goodreads.com/book/show/..."
-                  value={form.scrapeUrl}
-                  onChange={handleChange}
-                  className={errors.scrapeUrl ? "input-error" : ""}
-                />
-                {errors.scrapeUrl && <p className="error-text">{errors.scrapeUrl}</p>}
-              </>
-            ) : (
-              <>
-                <input name="title" placeholder="Title" value={form.title} onChange={handleChange} />
-                {errors.title && <p className="error-text">{errors.title}</p>}
-                <input name="author" placeholder="Author" value={form.author} onChange={handleChange} />
-                {errors.author && <p className="error-text">{errors.author}</p>}
-                <input name="genre" placeholder="Genre" value={form.genre} onChange={handleChange} />
-                {errors.genre && <p className="error-text">{errors.genre}</p>}
-                <input
-                  name="publication_year"
-                  type="number"
-                  placeholder="Publication year"
-                  value={form.publication_year}
-                  onChange={handleChange}
-                />
-                {errors.publication_year && <p className="error-text">{errors.publication_year}</p>}
-                <input name="source" placeholder="Source" value={form.source} onChange={handleChange} />
-                <input name="source_url" placeholder="Source URL (optional)" value={form.source_url} onChange={handleChange} />
-                {errors.source_url && <p className="error-text">{errors.source_url}</p>}
-                <textarea name="synopsis" className="review-textarea" placeholder="Synopsis" value={form.synopsis} onChange={handleChange} />
-                <textarea name="review" className="review-textarea" placeholder="Your review" value={form.review} onChange={handleChange} />
-                <input name="rating" type="number" min="0" max="5" placeholder="Rating (0-5)" value={form.rating} onChange={handleChange} />
-                {errors.rating && <p className="error-text">{errors.rating}</p>}
-                <input name="cover_url" placeholder="Cover URL (optional)" value={form.cover_url} onChange={handleChange} />
-                {errors.cover_url && <p className="error-text">{errors.cover_url}</p>}
-              </>
-            )}
+            <div className="view-toggle modal-mode-toggle">
+              <button
+                type="button"
+                className={`toggle-btn ${mode === "scrape" ? "active" : ""}`}
+                onClick={() => setMode("scrape")}
+                aria-pressed={mode === "scrape"}
+              >
+                Scrape URL
+              </button>
+              <button
+                type="button"
+                className={`toggle-btn ${mode === "manual" ? "active" : ""}`}
+                onClick={() => setMode("manual")}
+                aria-pressed={mode === "manual"}
+              >
+                Manual
+              </button>
+            </div>
 
-            {submitError && <p className="error-text">{submitError}</p>}
-            {successMessage && <p className="success-text">{successMessage}</p>}
-          </div>
+            <form className="scrape-form" onSubmit={handleSubmit}>
+              <div className="modal-body">
+                {mode === "scrape" ? (
+                  <>
+                    <p className="scrape-intro">
+                      Supported sources: Goodreads, Amazon, Barnes & Noble, Open Library.
+                    </p>
+                    <input
+                      name="scrapeUrl"
+                      placeholder="https://www.goodreads.com/book/show/..."
+                      value={form.scrapeUrl}
+                      onChange={handleChange}
+                      className={errors.scrapeUrl ? "input-error" : ""}
+                      aria-invalid={Boolean(errors.scrapeUrl)}
+                    />
+                    {errors.scrapeUrl && <p className="error-text">{errors.scrapeUrl}</p>}
+                  </>
+                ) : (
+                  <>
+                    <input name="title" placeholder="Title" value={form.title} onChange={handleChange} aria-invalid={Boolean(errors.title)} />
+                    {errors.title && <p className="error-text">{errors.title}</p>}
+                    <input name="author" placeholder="Author" value={form.author} onChange={handleChange} aria-invalid={Boolean(errors.author)} />
+                    {errors.author && <p className="error-text">{errors.author}</p>}
+                    <input name="genre" placeholder="Genre" value={form.genre} onChange={handleChange} aria-invalid={Boolean(errors.genre)} />
+                    {errors.genre && <p className="error-text">{errors.genre}</p>}
+                    <input
+                      name="publication_year"
+                      type="number"
+                      placeholder="Publication year"
+                      value={form.publication_year}
+                      onChange={handleChange}
+                      aria-invalid={Boolean(errors.publication_year)}
+                    />
+                    {errors.publication_year && <p className="error-text">{errors.publication_year}</p>}
+                    <input name="source" placeholder="Source" value={form.source} onChange={handleChange} />
+                    <input name="source_url" placeholder="Source URL (optional)" value={form.source_url} onChange={handleChange} aria-invalid={Boolean(errors.source_url)} />
+                    {errors.source_url && <p className="error-text">{errors.source_url}</p>}
+                    <textarea name="synopsis" className="review-textarea" placeholder="Synopsis" value={form.synopsis} onChange={handleChange} />
+                    <textarea name="review" className="review-textarea" placeholder="Your review" value={form.review} onChange={handleChange} />
+                    <input name="rating" type="number" min="0" max="5" placeholder="Rating (0-5)" value={form.rating} onChange={handleChange} aria-invalid={Boolean(errors.rating)} />
+                    {errors.rating && <p className="error-text">{errors.rating}</p>}
+                    <input name="cover_url" placeholder="Cover URL (optional)" value={form.cover_url} onChange={handleChange} aria-invalid={Boolean(errors.cover_url)} />
+                    {errors.cover_url && <p className="error-text">{errors.cover_url}</p>}
+                  </>
+                )}
 
-          <div className="modal-footer">
-            <button type="button" className="cancel-btn" onClick={onClose} disabled={isSubmitting}>
-              Cancel
-            </button>
-            <button type="submit" className="scrape-submit-btn" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : mode === "scrape" ? "Start Scraping Now" : "Save Book"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+                {submitError && <p className="error-text">{submitError}</p>}
+                {successMessage && <p className="success-text">{successMessage}</p>}
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="cancel-btn" onClick={onClose} disabled={isSubmitting}>
+                  Cancel
+                </button>
+                <button type="submit" className="scrape-submit-btn" disabled={isSubmitting}>
+                  {isSubmitting && <span className="button-spinner" aria-hidden="true" />}
+                  {isSubmitting ? "Saving..." : mode === "scrape" ? "Start Scraping Now" : "Save Book"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

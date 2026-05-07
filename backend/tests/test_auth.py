@@ -153,3 +153,18 @@ def test_logout_success():
     )
 
     assert me_response.status_code == 401
+
+
+def test_auth_requires_valid_bearer_header():
+    assert client.get("/auth/me").status_code == 401
+    assert client.get("/auth/me", headers={"Authorization": "Token abc"}).status_code == 401
+    assert client.get("/auth/me", headers={"Authorization": "Bearer "}).status_code == 401
+
+
+def test_logout_rejects_expired_session_token():
+    response = client.post(
+        "/auth/logout",
+        headers={"Authorization": "Bearer missing-token"},
+    )
+
+    assert response.status_code == 401

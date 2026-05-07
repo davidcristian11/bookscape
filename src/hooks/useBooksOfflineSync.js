@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  getAuthChangedEventName,
-} from "../utils/authStorage.js";
+import { getAuthChangedEventName } from "../utils/authStorage.js";
 import {
   checkBooksServerAvailability,
   getOfflineQueueCount,
@@ -82,7 +80,8 @@ export default function useBooksOfflineSync(onReconnectSync = null) {
 
       setSyncMessage(
         syncResult.authExpired
-          ? "Your in-memory server session expired after the backend restart. Please log in again to sync your offline changes."
+          ? syncResult.message ||
+            "The backend restarted and your in-memory session expired. Please re-authenticate to sync your offline changes."
           : syncResult.synced
             ? "Synced successfully"
             : "Sync failed"

@@ -84,6 +84,35 @@ def test_faker_loop_status_endpoint():
     assert running.json()["running"] is True
 
 
+def test_faker_loop_cannot_start_twice_for_same_user():
+    headers = register_and_get_headers()
+
+    first = client.post(
+        "/automation/faker/start",
+        json={"interval_seconds": 0.2},
+        headers=headers,
+    )
+    second = client.post(
+        "/automation/faker/start",
+        json={"interval_seconds": 0.2},
+        headers=headers,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert "already running" in second.json()["detail"]
+
+
+def test_faker_loop_stop_is_idempotent_when_not_running():
+    headers = register_and_get_headers()
+
+    stop_response = client.post("/automation/faker/stop", headers=headers)
+
+    assert stop_response.status_code == 200
+    assert stop_response.json()["running"] is False
+    assert stop_response.json()["interval_seconds"] is None
+
+
 def test_faker_loop_stop_stops_generation():
     headers = register_and_get_headers()
 

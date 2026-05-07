@@ -1,4 +1,4 @@
-import { getAuthToken } from "../utils/authStorage";
+import { getAuthToken, markAuthSessionExpired } from "../utils/authStorage";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -41,9 +41,10 @@ async function request(path, options = {}) {
   });
 
   if (response.status === 401 || response.status === 403) {
-    throw new Error(
-      "Your in-memory server session expired after the backend restart. Please log in again to sync your offline changes."
-    );
+    const message =
+      "The backend restarted and your in-memory session expired. Please re-authenticate to sync your offline changes.";
+    markAuthSessionExpired(message);
+    throw new Error(message);
   }
 
   if (response.status === 204) {

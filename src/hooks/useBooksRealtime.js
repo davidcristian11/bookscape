@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { clearAuthSession, getAuthToken } from "../utils/authStorage";
+import {
+  getAuthChangedEventName,
+  getAuthToken,
+  markAuthSessionExpired,
+} from "../utils/authStorage";
 import { removeLocalBook, upsertLocalBook } from "../utils/localBooksStore";
 
 const API_BASE_URL =
@@ -17,6 +21,7 @@ export default function useBooksRealtime(onEvent = null) {
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState("connecting");
   const [realtimeMessage, setRealtimeMessage] = useState("Realtime updates connecting...");
+  const [authToken, setAuthToken] = useState(getAuthToken());
   const callbackRef = useRef(onEvent);
 
   useEffect(() => {
@@ -24,8 +29,22 @@ export default function useBooksRealtime(onEvent = null) {
   }, [onEvent]);
 
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
+    const handleAuthChange = () => {
+      setAuthToken(getAuthToken());
+    };
+
+    window.addEventListener(getAuthChangedEventName(), handleAuthChange);
+
+    return () => {
+      window.removeEventListener(getAuthChangedEventName(), handleAuthChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authToken) {
+      setIsRealtimeConnected(false);
+      setRealtimeStatus("auth_required");
+      setRealtimeMessage("Realtime updates paused until re-authentication.");
       return undefined;
     }
 
@@ -40,7 +59,7 @@ export default function useBooksRealtime(onEvent = null) {
       setRealtimeMessage("Realtime updates connecting...");
 
       websocket = new WebSocket(
-        `${toWebSocketBaseUrl(API_BASE_URL)}/ws/books?token=${encodeURIComponent(token)}`
+        `${toWebSocketBaseUrl(API_BASE_URL)}/ws/books?token=${encodeURIComponent(authToken)}`
       );
 
       websocket.onopen = () => {
@@ -82,12 +101,11 @@ export default function useBooksRealtime(onEvent = null) {
         if (disposed) return;
 
         if (event.code === 4401) {
-          clearAuthSession();
-          window.sessionStorage.setItem(
-            "bookscape_session_message",
-            "Your in-memory session expired after the server restart. Please log in again."
+          markAuthSessionExpired(
+            "The backend restarted and your in-memory session expired. Please re-authenticate to sync your offline changes."
           );
-          window.location.href = "/login";
+          setRealtimeStatus("auth_required");
+          setRealtimeMessage("Sync paused: re-authentication required.");
           return;
         }
 
@@ -125,7 +143,7 @@ export default function useBooksRealtime(onEvent = null) {
         }
       }
     };
-  }, []);
+  }, [authToken]);
 
   return {
     isRealtimeConnected,

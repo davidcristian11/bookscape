@@ -3,7 +3,8 @@ import { getStoredUser } from "../utils/authStorage.js";
 const OFFLINE_QUEUE_EVENT = "bookscape:offline-queue-changed";
 
 function getCurrentUserScope() {
-  return getStoredUser()?.id ?? "anonymous";
+  const user = getStoredUser();
+  return user?.email ?? user?.id ?? "anonymous";
 }
 
 function getOfflineQueueStorageKey() {
@@ -27,18 +28,71 @@ function emitOfflineQueueChanged() {
   window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_EVENT));
 }
 
+function buildOperationId(type, id) {
+  return `${type}-${id}`;
+}
+
+function getOperationKey(operation) {
+  return (
+    operation.operationId ||
+    operation.id ||
+    `${operation.type}-${operation.clientMutationId || operation.tempId || operation.bookId}`
+  );
+}
+
+function normalizeQueue(queue) {
+  const nextQueue = [];
+  const seen = new Set();
+
+  for (const operation of queue.filter(Boolean)) {
+    if (["completed", "synced"].includes(operation.status)) {
+      continue;
+    }
+
+    const clientMutationId =
+      operation.clientMutationId || operation.tempId || operation.bookId;
+    const operationId = getOperationKey({
+      ...operation,
+      clientMutationId,
+    });
+
+    if (!operationId || seen.has(operationId)) {
+      continue;
+    }
+
+    seen.add(operationId);
+    nextQueue.push({
+      ...operation,
+      id: operation.id || operationId,
+      operationId,
+      clientMutationId,
+      status: operation.status || "pending",
+    });
+  }
+
+  return nextQueue;
+}
+
 export function getOfflineQueueEventName() {
   return OFFLINE_QUEUE_EVENT;
 }
 
 export function getOfflineQueue() {
-  return readJson(getOfflineQueueStorageKey(), []);
+  const key = getOfflineQueueStorageKey();
+  const rawQueue = readJson(key, []);
+  const normalizedQueue = normalizeQueue(rawQueue);
+
+  if (JSON.stringify(rawQueue) !== JSON.stringify(normalizedQueue)) {
+    writeJson(key, normalizedQueue);
+  }
+
+  return normalizedQueue;
 }
 
 export function setOfflineQueue(queue) {
-  writeJson(getOfflineQueueStorageKey(), queue);
+  writeJson(getOfflineQueueStorageKey(), normalizeQueue(queue));
   emitOfflineQueueChanged();
-  return queue;
+  return getOfflineQueue();
 }
 
 export function clearOfflineQueue() {
@@ -52,10 +106,23 @@ export function getOfflineQueueCount() {
 export function enqueueCreateOperation(tempId, payload) {
   const queue = getOfflineQueue();
 
+  if (
+    queue.some(
+      (operation) =>
+        operation.type === "create" && operation.tempId === tempId
+    )
+  ) {
+    return setOfflineQueue(queue);
+  }
+
   queue.push({
+    id: buildOperationId("create", tempId),
+    operationId: buildOperationId("create", tempId),
     type: "create",
     tempId,
+    clientMutationId: tempId,
     payload,
+    status: "pending",
   });
 
   return setOfflineQueue(queue);
@@ -99,9 +166,13 @@ export function enqueueUpdateOperation(bookId, payload) {
   }
 
   queue.push({
+    id: buildOperationId("update", bookId),
+    operationId: buildOperationId("update", bookId),
     type: "update",
     bookId,
+    clientMutationId: bookId,
     payload,
+    status: "pending",
   });
 
   return setOfflineQueue(queue);
@@ -136,8 +207,12 @@ export function enqueueDeleteOperation(bookId) {
   );
 
   nextQueue.push({
+    id: buildOperationId("delete", bookId),
+    operationId: buildOperationId("delete", bookId),
     type: "delete",
     bookId,
+    clientMutationId: bookId,
+    status: "pending",
   });
 
   return setOfflineQueue(nextQueue);

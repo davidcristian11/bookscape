@@ -1,103 +1,224 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { vi } from 'vitest';
-import BookDetailPage from '../BookDetailPage';
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import BookDetailPage from "../BookDetailPage";
 
-const mockNavigate = vi.fn();
+const updateBook = vi.fn();
+const getBookById = vi.fn();
+const deleteBook = vi.fn();
+const getQuotesByBook = vi.fn();
+const createQuote = vi.fn();
+const updateQuote = vi.fn();
+const deleteQuote = vi.fn();
 
-vi.mock('react-router-dom', async () => {
-    const actual = await vi.importActual('react-router-dom');
-    return {
-        ...actual,
-        useNavigate: () => mockNavigate,
-    };
-});
+const hookState = vi.hoisted(() => ({
+  offlineSync: {
+    isOfflineMode: false,
+    offlineQueueCount: 0,
+    isSyncingQueue: false,
+    connectionMessage: "Online",
+    queueText: "",
+  },
+  realtime: {
+    isRealtimeConnected: true,
+  },
+}));
 
-const books = [
-    {
-        id: 1,
-        title: 'The Midnight Library',
-        author: 'Matt Haig',
-        genre: 'Fiction',
-        source: 'Manual',
-        review: 'Nice book',
-    },
-];
+const baseBook = {
+  id: "book-1",
+  title: "Dune",
+  author: "Frank Herbert",
+  genre: "Sci-Fi",
+  publication_year: 1965,
+  source: "Goodreads",
+  source_url: "",
+  synopsis: "A desert planet.",
+  review: "Original review",
+  rating: 5,
+  cover_url: null,
+};
 
-function renderPage(path = '/book/1', extraProps = {}) {
-    return render(
-        <MemoryRouter initialEntries={[path]}>
-            <Routes>
-                <Route
-                    path="/book/:id"
-                    element={
-                        <BookDetailPage
-                            books={books}
-                            onDelete={vi.fn()}
-                            onUpdate={vi.fn()}
-                            {...extraProps}
-                        />
-                    }
-                />
-            </Routes>
-        </MemoryRouter>
-    );
+vi.mock("../../api/booksApi", () => ({
+  getBookById: (...args) => getBookById(...args),
+  updateBook: (...args) => updateBook(...args),
+  deleteBook: (...args) => deleteBook(...args),
+}));
+
+vi.mock("../../api/quotesApi", () => ({
+  getQuotesByBook: (...args) => getQuotesByBook(...args),
+  createQuote: (...args) => createQuote(...args),
+  updateQuote: (...args) => updateQuote(...args),
+  deleteQuote: (...args) => deleteQuote(...args),
+}));
+
+vi.mock("../../hooks/useBooksOfflineSync", () => ({
+  default: () => hookState.offlineSync,
+}));
+
+vi.mock("../../hooks/useBooksRealtime", () => ({
+  default: () => hookState.realtime,
+}));
+
+function renderDetail() {
+  return render(
+    <MemoryRouter initialEntries={["/book/book-1"]}>
+      <Routes>
+        <Route path="/book/:id" element={<BookDetailPage />} />
+        <Route path="/library" element={<h1>Library</h1>} />
+      </Routes>
+    </MemoryRouter>
+  );
 }
 
-describe('BookDetailPage', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        vi.spyOn(window, 'alert').mockImplementation(() => {});
-    });
+describe("BookDetailPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getBookById.mockResolvedValue(baseBook);
+    getQuotesByBook.mockResolvedValue([]);
+    updateBook.mockResolvedValue(baseBook);
+    deleteBook.mockResolvedValue(null);
+    createQuote.mockResolvedValue({});
+    updateQuote.mockResolvedValue({});
+    deleteQuote.mockResolvedValue(null);
+    hookState.offlineSync = {
+      isOfflineMode: false,
+      offlineQueueCount: 0,
+      isSyncingQueue: false,
+      connectionMessage: "Online",
+      queueText: "",
+    };
+    hookState.realtime = { isRealtimeConnected: true };
+    window.confirm = vi.fn(() => true);
+  });
 
-    afterEach(() => {
-        window.alert.mockRestore();
-    });
+  it("updates the review/details form", async () => {
+    const user = userEvent.setup();
+    updateBook.mockResolvedValue({ ...baseBook, review: "Updated review" });
 
-    it('renders not found when book does not exist', () => {
-        renderPage('/book/999');
-        expect(screen.getByText(/book not found/i)).toBeInTheDocument();
-    });
+    renderDetail();
 
-    it('renders existing book details', () => {
-        renderPage();
-        expect(screen.getByText('The Midnight Library')).toBeInTheDocument();
-        expect(screen.getByText(/by Matt Haig/i)).toBeInTheDocument();
-        expect(screen.getByText(/your review/i)).toBeInTheDocument();
-    });
+    const review = await screen.findByPlaceholderText(/your review/i);
+    await user.clear(review);
+    await user.type(review, "Updated review");
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
 
-    it('updates textarea and saves changes', async () => {
-        const user = userEvent.setup();
-        const onUpdate = vi.fn();
+    expect(updateBook).toHaveBeenCalledWith(
+      "book-1",
+      expect.objectContaining({ review: "Updated review" })
+    );
+    expect(await screen.findByText(/changes saved/i)).toBeInTheDocument();
+  });
 
-        renderPage('/book/1', { onUpdate });
+  it("validates invalid book edits before saving", async () => {
+    const user = userEvent.setup();
+    renderDetail();
 
-        const textarea = screen.getByPlaceholderText(/write your thoughts here/i);
-        await user.clear(textarea);
-        await user.type(textarea, 'Updated review text');
+    const title = await screen.findByPlaceholderText("Title");
+    await user.clear(title);
+    const rating = document.querySelector('input[name="rating"]');
+    await user.clear(rating);
+    await user.type(rating, "9");
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
 
-        await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(screen.getByText(/title is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/rating must be between/i)).toBeInTheDocument();
+    expect(updateBook).not.toHaveBeenCalled();
+  });
 
-        expect(onUpdate).toHaveBeenCalledTimes(1);
-        expect(onUpdate).toHaveBeenCalledWith(
-            expect.objectContaining({
-                id: 1,
-                review: 'Updated review text',
-            })
-        );
-        expect(window.alert).toHaveBeenCalled();
-    });
+  it("shows update failures without leaving the page", async () => {
+    const user = userEvent.setup();
+    updateBook.mockRejectedValue(new Error("Save failed"));
+    renderDetail();
 
-    it('deletes book and navigates back to library', async () => {
-        const user = userEvent.setup();
-        const onDelete = vi.fn();
+    await user.click(await screen.findByRole("button", { name: /save changes/i }));
 
-        renderPage('/book/1', { onDelete });
+    expect(await screen.findByText(/save failed/i)).toBeInTheDocument();
+  });
 
-        await user.click(screen.getByRole('button', { name: /delete book/i }));
+  it("creates quote cards and validates missing quote text", async () => {
+    const user = userEvent.setup();
+    renderDetail();
 
-        expect(onDelete).toHaveBeenCalledWith(1);
-        expect(mockNavigate).toHaveBeenCalledWith('/library');
-    });
+    await user.click(await screen.findByRole("button", { name: /create quote/i }));
+    expect(screen.getByText(/quote text is required/i)).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("Quote text"), "Fear is the mind-killer.");
+    await user.type(screen.getByPlaceholderText("Optional note"), "Theme");
+    await user.type(screen.getByPlaceholderText("Relationship label"), "Resilience");
+    await user.click(screen.getByRole("button", { name: /create quote/i }));
+
+    expect(createQuote).toHaveBeenCalledWith(
+      "book-1",
+      expect.objectContaining({
+        quote: "Fear is the mind-killer.",
+        note: "Theme",
+        relationship_label: "Resilience",
+      })
+    );
+    expect(getQuotesByBook).toHaveBeenCalledTimes(2);
+  });
+
+  it("edits and deletes existing quote cards", async () => {
+    const user = userEvent.setup();
+    getQuotesByBook.mockResolvedValue([
+      {
+        id: "quote-1",
+        quote: "A quote",
+        note: "Note",
+        relationship_label: "Identity",
+      },
+    ]);
+    renderDetail();
+
+    expect(await screen.findByText(/a quote/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /edit/i }));
+    await user.clear(screen.getByPlaceholderText("Quote text"));
+    await user.type(screen.getByPlaceholderText("Quote text"), "Edited quote");
+    await user.click(screen.getByRole("button", { name: /update quote/i }));
+
+    expect(updateQuote).toHaveBeenCalledWith(
+      "quote-1",
+      expect.objectContaining({ quote: "Edited quote" })
+    );
+
+    const quoteCard = screen.getByText(/a quote/i).closest(".detail-quote-card");
+    await user.click(within(quoteCard).getByRole("button", { name: /delete/i }));
+    expect(deleteQuote).toHaveBeenCalledWith("quote-1");
+  });
+
+  it("does not delete quote cards when confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    window.confirm = vi.fn(() => false);
+    getQuotesByBook.mockResolvedValue([{ id: "quote-1", quote: "A quote" }]);
+    renderDetail();
+
+    const quoteCard = (await screen.findByText(/a quote/i)).closest(".detail-quote-card");
+    await user.click(within(quoteCard).getByRole("button", { name: /delete/i }));
+
+    expect(deleteQuote).not.toHaveBeenCalled();
+  });
+
+  it("deletes the book after confirmation", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: /delete book/i }));
+
+    expect(deleteBook).toHaveBeenCalledWith("book-1");
+    expect(await screen.findByText("Library")).toBeInTheDocument();
+  });
+
+  it("renders load errors and missing books", async () => {
+    getBookById.mockRejectedValueOnce(new Error("Not available"));
+    renderDetail();
+    expect(await screen.findByText(/not available/i)).toBeInTheDocument();
+  });
+
+  it("shows sync banner when realtime is disconnected", async () => {
+    hookState.realtime = { isRealtimeConnected: false };
+    renderDetail();
+
+    expect(await screen.findByText(/realtime updates disconnected/i)).toBeInTheDocument();
+  });
 });

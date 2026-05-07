@@ -42,6 +42,7 @@ def register_and_get_headers(
     )
 
     assert response.status_code == 201
+    book_repository.clear()
     token = response.json()["token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -64,6 +65,52 @@ def test_faker_loop_start_generates_books():
 
     assert books_response.status_code == 200
     assert books_response.json()["total"] >= 2
+
+
+def test_faker_loop_status_endpoint():
+    headers = register_and_get_headers()
+
+    stopped = client.get("/automation/faker/status", headers=headers)
+    assert stopped.status_code == 200
+    assert stopped.json()["running"] is False
+
+    client.post(
+        "/automation/faker/start",
+        json={"interval_seconds": 0.2},
+        headers=headers,
+    )
+    running = client.get("/automation/faker/status", headers=headers)
+    assert running.status_code == 200
+    assert running.json()["running"] is True
+
+
+def test_faker_loop_cannot_start_twice_for_same_user():
+    headers = register_and_get_headers()
+
+    first = client.post(
+        "/automation/faker/start",
+        json={"interval_seconds": 0.2},
+        headers=headers,
+    )
+    second = client.post(
+        "/automation/faker/start",
+        json={"interval_seconds": 0.2},
+        headers=headers,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert "already running" in second.json()["detail"]
+
+
+def test_faker_loop_stop_is_idempotent_when_not_running():
+    headers = register_and_get_headers()
+
+    stop_response = client.post("/automation/faker/stop", headers=headers)
+
+    assert stop_response.status_code == 200
+    assert stop_response.json()["running"] is False
+    assert stop_response.json()["interval_seconds"] is None
 
 
 def test_faker_loop_stop_stops_generation():
@@ -134,3 +181,26 @@ def test_faker_loop_is_user_specific():
 
     assert books_user_1.json()["total"] >= 1
     assert books_user_2.json()["total"] == 0
+
+
+def test_faker_loop_websocket_notification():
+    headers = register_and_get_headers()
+    token = headers["Authorization"].replace("Bearer ", "")
+
+    with client.websocket_connect(f"/ws/books?token={token}") as websocket:
+        connected = websocket.receive_json()
+        assert connected["type"] == "ws_connected"
+
+        start_response = client.post(
+            "/automation/faker/start",
+            json={"interval_seconds": 0.2},
+            headers=headers,
+        )
+        assert start_response.status_code == 200
+
+        started = websocket.receive_json()
+        assert started["type"] == "faker_started"
+
+        created = websocket.receive_json()
+        assert created["type"] == "book_created"
+        assert created["source"] == "faker_loop"

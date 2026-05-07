@@ -1,98 +1,177 @@
 .navbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1.5rem 4rem; /* Spațiere mai generoasă ca în Figma */
-    background-color: var(--bg-color); /* Aceeași culoare ca fundalul paginii */
-    /* Eliminăm border-bottom pentru a lăsa spațiul liber ca în design */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  min-height: 76px;
+  padding: 0.9rem clamp(1rem, 4vw, 4rem);
+  border-bottom: 1px solid rgba(202, 188, 167, 0.55);
+  background: rgba(255, 253, 248, 0.86);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 8px 28px rgba(44, 74, 62, 0.06);
 }
 
-/* --- Zona de Logo --- */
-.navbar-logo a {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    text-decoration: none;
-    color: var(--primary-green);
+.navbar-left,
+.navbar-actions,
+.navbar-links {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-left {
+  min-width: 0;
+  gap: clamp(1rem, 3vw, 2.25rem);
+}
+
+.navbar-links,
+.navbar-actions {
+  gap: 0.55rem;
+}
+
+.navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--primary-green);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2.3rem;
+  height: 2.7rem;
+  place-items: center;
+  border: 1px solid rgba(44, 74, 62, 0.25);
+  border-left: 6px solid var(--accent-orange);
+  border-radius: var(--radius-xs);
+  background:
+    linear-gradient(90deg, rgba(44, 74, 62, 0.08), transparent 38%),
+    var(--surface-color);
+  box-shadow: 0 8px 18px rgba(44, 74, 62, 0.1);
+  font-family: var(--font-serif);
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .logo-text {
-    font-family: Georgia, serif;
-    font-size: 1.4rem;
-    font-weight: bold;
-    letter-spacing: -0.5px;
+  font-family: var(--font-serif);
+  font-size: 1.32rem;
+  font-weight: 700;
 }
 
-.book-icon {
-    color: var(--primary-green);
+.nav-link,
+.nav-link-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-gray);
+  font-size: 0.94rem;
+  font-weight: 700;
+  padding: 0.52rem 0.72rem;
+  text-decoration: none;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
-/* --- Zona de Link-uri --- */
-.navbar-links {
-    display: flex;
-    align-items: center;
-    gap: 2rem; /* Spațiu generos între link-uri */
-}
-
-.nav-link {
-    text-decoration: none;
-    color: var(--text-gray);
-    font-size: 0.95rem;
-    font-weight: 500;
-    transition: color 0.2s ease;
-}
-
-.nav-link:hover {
-    color: var(--text-dark);
-}
-
-/* Evidențierea paginii curente */
+.nav-link:hover,
 .nav-link.active {
-    color: var(--text-dark);
-    font-weight: 600;
+  background: var(--primary-green-soft);
+  border-color: rgba(44, 74, 62, 0.12);
+  color: var(--primary-green);
 }
 
-/* Butonul de Sign Out (puțin mai subtil) */
-.nav-link.sign-out {
-    margin-left: 1rem;
-    opacity: 0.8;
+.nav-link-button {
+  background: transparent;
+  cursor: pointer;
 }
 
-.nav-link.sign-out:hover {
-    opacity: 1;
+.nav-link-button.sign-out {
+  color: var(--danger);
 }
 
-/* Butonul solid de Register (doar pentru paginile de auth) */
+.nav-link-button.sign-out:hover {
+  background: var(--danger-soft);
+  border-color: #f4bbc6;
+}
+
+.nav-user {
+  max-width: 13rem;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .nav-btn-solid {
-    background-color: var(--primary-green);
-    color: white;
-    text-decoration: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    font-weight: 500;
-    transition: background-color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.45rem;
+  border: 1px solid var(--primary-green);
+  border-radius: var(--radius-sm);
+  background: var(--primary-green);
+  color: white;
+  font-size: 0.94rem;
+  font-weight: 800;
+  padding: 0.58rem 1.05rem;
+  text-decoration: none;
+  box-shadow: 0 10px 22px rgba(44, 74, 62, 0.18);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .nav-btn-solid:hover {
-    background-color: var(--primary-green-hover);
+  border-color: var(--primary-green-hover);
+  background: var(--primary-green-hover);
+  box-shadow: 0 14px 28px rgba(44, 74, 62, 0.22);
 }
 
-/* --- Responsive Design (Gold Challenge) --- */
-@media (max-width: 768px) {
-    .navbar {
-        flex-direction: column;
-        padding: 1rem;
-        gap: 1rem;
-    }
+@media (max-width: 760px) {
+  .navbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+  }
 
-    .navbar-links {
-        width: 100%;
-        justify-content: space-around; /* Distribuie link-urile pe tot ecranul */
-        gap: 0.5rem;
-    }
+  .navbar-left,
+  .navbar-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
 
-    .nav-link {
-        font-size: 0.85rem;
-    }
+  .navbar-left {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .navbar-links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .nav-link,
+  .nav-link-button,
+  .nav-btn-solid {
+    justify-content: center;
+    padding-inline: 0.6rem;
+  }
+
+  .nav-user {
+    max-width: 9rem;
+  }
 }

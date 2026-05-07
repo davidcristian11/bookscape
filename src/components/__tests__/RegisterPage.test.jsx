@@ -1,53 +1,92 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import { vi } from 'vitest';
-import RegisterPage from './RegisterPage';
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import RegisterPage from "../RegisterPage";
+import { registerUser } from "../../api/authApi";
+import {
+  getAuthRecoveryMessage,
+  getLastKnownUser,
+  saveAuthSession,
+} from "../../utils/authStorage";
 
-const mockNavigate = vi.fn();
+vi.mock("../../api/authApi", () => ({
+  registerUser: vi.fn(),
+}));
 
-vi.mock('react-router-dom', async () => {
-    const actual = await vi.importActual('react-router-dom');
-    return {
-        ...actual,
-        useNavigate: () => mockNavigate,
+vi.mock("../../utils/authStorage", () => ({
+  getAuthRecoveryMessage: vi.fn(() => null),
+  getLastKnownUser: vi.fn(() => null),
+  saveAuthSession: vi.fn(),
+}));
+
+describe("RegisterPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getAuthRecoveryMessage.mockReturnValue(null);
+    getLastKnownUser.mockReturnValue(null);
+  });
+
+  it("validates name, email, and password before submitting", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><RegisterPage /></MemoryRouter>);
+
+    await user.type(screen.getByPlaceholderText("Your Name"), "A");
+    await user.type(screen.getByPlaceholderText("your@email.com"), "reader");
+    await user.type(screen.getByPlaceholderText("Choose a password"), "123");
+    await user.click(screen.getByRole("button", { name: /register/i }));
+
+    expect(screen.getByText(/name must contain/i)).toBeInTheDocument();
+  });
+
+  it("saves the session after successful registration", async () => {
+    const user = userEvent.setup();
+    const authData = {
+      token: "token-1",
+      user: { id: "user-1", name: "Reader", email: "reader@example.com" },
     };
-});
+    registerUser.mockResolvedValue(authData);
+    render(<MemoryRouter><RegisterPage /></MemoryRouter>);
 
-describe('RegisterPage', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
+    await user.type(screen.getByPlaceholderText("Your Name"), "Reader");
+    await user.type(screen.getByPlaceholderText("your@email.com"), "reader@example.com");
+    await user.type(screen.getByPlaceholderText("Choose a password"), "secret123");
+    await user.click(screen.getByRole("button", { name: /register/i }));
+
+    expect(registerUser).toHaveBeenCalledWith({
+      name: "Reader",
+      email: "reader@example.com",
+      password: "secret123",
+    });
+    expect(saveAuthSession).toHaveBeenCalledWith(authData);
+  });
+
+  it("shows backend registration errors", async () => {
+    const user = userEvent.setup();
+    registerUser.mockRejectedValue(new Error("Email already registered"));
+    render(<MemoryRouter><RegisterPage /></MemoryRouter>);
+
+    await user.type(screen.getByPlaceholderText("Your Name"), "Reader");
+    await user.type(screen.getByPlaceholderText("your@email.com"), "reader@example.com");
+    await user.type(screen.getByPlaceholderText("Choose a password"), "secret123");
+    await user.click(screen.getByRole("button", { name: /register/i }));
+
+    expect(await screen.findByText(/email already registered/i)).toBeInTheDocument();
+  });
+
+  it("prefills safe profile details for backend restart recovery", () => {
+    getAuthRecoveryMessage.mockReturnValue(
+      "The backend restarted and your in-memory session expired."
+    );
+    getLastKnownUser.mockReturnValue({
+      name: "Reader",
+      email: "reader@example.com",
     });
 
-    it('renders register form fields', () => {
-        render(
-            <MemoryRouter>
-                <RegisterPage />
-            </MemoryRouter>
-        );
+    render(<MemoryRouter><RegisterPage /></MemoryRouter>);
 
-        expect(screen.getByText(/create your account/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/name/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /register/i })).toBeInTheDocument();
-    });
-
-    it('navigates to library after submit', async () => {
-        const user = userEvent.setup();
-
-        render(
-            <MemoryRouter>
-                <RegisterPage />
-            </MemoryRouter>
-        );
-
-        await user.type(screen.getByLabelText(/name/i), 'Cristian');
-        await user.type(screen.getByLabelText(/email/i), 'cristian@test.com');
-        await user.type(screen.getByLabelText(/password/i), 'password123');
-
-        await user.click(screen.getByRole('button', { name: /register/i }));
-
-        expect(mockNavigate).toHaveBeenCalledWith('/library');
-    });
+    expect(screen.getByDisplayValue("Reader")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("reader@example.com")).toBeInTheDocument();
+    expect(screen.getByText(/backend accounts are RAM-only/i)).toBeInTheDocument();
+  });
 });

@@ -1,10 +1,10 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { isAuthenticated } from "../utils/authStorage";
+import { hasOfflineSession, isAuthenticated } from "../utils/authStorage";
 
 export default function ProtectedRoute() {
   const location = useLocation();
 
-  if (!isAuthenticated()) {
+  if (!isAuthenticated() && !hasOfflineSession()) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

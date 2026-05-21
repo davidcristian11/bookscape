@@ -6,7 +6,7 @@ from graphql import GraphQLError
 from pydantic import ValidationError
 from strawberry.types import Info
 
-from app.dependencies import auth_service, book_service, quote_card_service, seed_service
+from app.dependencies import auth_service, book_service, logging_service, quote_card_service, seed_service
 from app.routes.auth import _extract_bearer_token
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
 from app.schemas.book import BookCreate, BookResponse, BookUpdate
@@ -238,6 +238,12 @@ class Mutation:
             created = book_service.create_book(current_user.id, BookCreate(**input.__dict__))
         except ValidationError as exc:
             raise GraphQLError(_format_validation_error(exc)) from exc
+        logging_service.log_action(
+            user_id=current_user.id,
+            role_name=current_user.role,
+            action="create_book",
+            details=f"GraphQL created book {created.id}: {created.title}",
+        )
         return _map_book(created)
 
     @strawberry.mutation
@@ -249,12 +255,26 @@ class Mutation:
             raise GraphQLError(_format_validation_error(exc)) from exc
         if updated is None:
             raise GraphQLError("Book not found")
+        logging_service.log_action(
+            user_id=current_user.id,
+            role_name=current_user.role,
+            action="update_book",
+            details=f"GraphQL updated book {id}",
+        )
         return _map_book(updated)
 
     @strawberry.mutation
     async def delete_book(self, info: Info, id: str) -> bool:
         current_user = _require_current_user(info)
-        return book_service.delete_book(current_user.id, id)
+        deleted = book_service.delete_book(current_user.id, id)
+        if deleted:
+            logging_service.log_action(
+                user_id=current_user.id,
+                role_name=current_user.role,
+                action="delete_book",
+                details=f"GraphQL deleted book {id}",
+            )
+        return deleted
 
     @strawberry.mutation
     async def create_quote_card(self, info: Info, input: CreateQuoteInput) -> QuoteCardType:
@@ -269,6 +289,12 @@ class Mutation:
             raise GraphQLError(_format_validation_error(exc)) from exc
         if created is None:
             raise GraphQLError("Book not found")
+        logging_service.log_action(
+            user_id=current_user.id,
+            role_name=current_user.role,
+            action="create_quote_card",
+            details=f"GraphQL created quote card {created.id}",
+        )
         return _map_quote(created)
 
     @strawberry.mutation
@@ -280,12 +306,26 @@ class Mutation:
             raise GraphQLError(_format_validation_error(exc)) from exc
         if updated is None:
             raise GraphQLError("Quote not found")
+        logging_service.log_action(
+            user_id=current_user.id,
+            role_name=current_user.role,
+            action="update_quote_card",
+            details=f"GraphQL updated quote card {quote_id}",
+        )
         return _map_quote(updated)
 
     @strawberry.mutation
     async def delete_quote_card(self, info: Info, quote_id: str) -> bool:
         current_user = _require_current_user(info)
-        return quote_card_service.delete_quote(current_user.id, quote_id)
+        deleted = quote_card_service.delete_quote(current_user.id, quote_id)
+        if deleted:
+            logging_service.log_action(
+                user_id=current_user.id,
+                role_name=current_user.role,
+                action="delete_quote_card",
+                details=f"GraphQL deleted quote card {quote_id}",
+            )
+        return deleted
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

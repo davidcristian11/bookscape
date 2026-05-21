@@ -1,168 +1,146 @@
 # BookScape
 
-BookScape is a personal digital library app for collecting, scraping, reviewing, and analyzing books. The main domain entity is `Book`, with a Gold-level one-to-many relationship from `Book` to `QuoteCard` for connected quotes and ideas.
+BookScape is a React/Vite + FastAPI personal digital library for collecting, scraping, reviewing, chatting about, and analyzing books. Assignment 3 moves the app from RAM-only backend storage to PostgreSQL persistence, with MongoDB-backed realtime chat.
+
+## Structure
+
+```text
+bookscape/
+  frontend/        React/Vite app, Vitest tests, Playwright tests
+  backend/         FastAPI app, SQLAlchemy models, Alembic migrations, pytest tests
+  docker-compose.yml
+  README.md
+```
 
 ## Stack
 
 - Frontend: React, Vite, React Router, Recharts, React Flow, Framer Motion
 - Backend: FastAPI, Pydantic, Strawberry GraphQL, WebSockets, Faker
-- Storage: RAM only on the server. There is no database, ORM, file persistence, SQLite, Postgres, MongoDB, or external storage.
+- Relational persistence: PostgreSQL, SQLAlchemy, Alembic
+- Chat persistence: MongoDB
 
-## Run Backend
+## Start Databases
+
+```powershell
+docker compose up -d postgres mongodb
+```
+
+PostgreSQL uses:
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `bookscape_db`
+- User: `bookscape`
+- Password: `bookscape_password`
+
+MongoDB uses `mongodb://localhost:27017`, database `bookscape_chat`.
+
+## Backend
 
 ```powershell
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+copy .env.example .env
+alembic upgrade head
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Backend defaults to `http://127.0.0.1:8000`.
-
-## Run Frontend
+## Frontend
 
 ```powershell
+cd frontend
 npm install
+copy .env.example .env
 npm run dev
 ```
 
-Frontend defaults to `http://localhost:5173`. Set `VITE_API_BASE_URL=http://127.0.0.1:8000` if needed.
+Frontend defaults to `http://localhost:5173` and backend defaults to `http://127.0.0.1:8000`.
 
-## Implemented Features
+## Demo Credentials
 
-- Landing page with BookScape identity, tagline, description, and CTA.
-- Mock in-memory authentication with register, login, logout, and protected routes.
-- My Library master view with table/grid modes, server pagination, and infinite scroll.
-- Book CRUD with title, author, genre, publication year, source, source URL, synopsis, review, rating, and optional cover URL.
-- Scrape Book Data flow that fetches real book pages with a safe timeout/User-Agent and parses OpenGraph, JSON-LD schema.org Book data, meta descriptions, page titles, and source fallbacks.
-- Reading Insights charts for genres, sources, monthly additions, ratings, and quote relationships.
-- Idea Nexus board backed by the real `Book -> QuoteCards` relationship.
-- Offline detection and queued create/update/delete operations for books, synchronized when the backend is reachable again. If the backend restarts, the queue is preserved client-side until the user logs in/registers again.
-- WebSocket updates for book creation/update/deletion and Faker-generated books.
-- Async Faker loop start/stop/status endpoints. The frontend exposes loop controls only, not one-shot fake generation.
-- New accounts are seeded in RAM with demo books and connected QuoteCards so Idea Nexus is meaningful on first launch.
-- REST plus additional GraphQL queries/mutations for books and quote cards.
-- Cookie-based monitoring for visits, last section, last active timestamp, `bookscape_view_mode`, and `bookscape_page_size`.
+- Admin: `admin@bookscape.test` / `admin123`
+- Normal user: `reader@bookscape.test` / `reader123`
 
-## Assignment 1 Checklist
+Admin users see the Admin area with observation list and logs. Normal users can use library, insights, Idea Nexus, and chat, but cannot access admin data.
 
-- Bronze: presentation view, master/detail Book views, paginated table, CRUD, client-side validation, separated API/service files and components.
-- Silver: cookie-based user activity/preference monitoring is implemented, with practical frontend tests.
-- Gold: concept pages are connected, responsive layout is preserved, animations/transitions are tasteful, charts update from shared data, and Playwright scenarios cover three main flows.
+## LAN / VM Demo
 
-## Assignment 2 Checklist
+1. On the backend machine, run:
 
-- Bronze: FastAPI REST API, server-side validation, separated routes/services/repositories/schemas/models, RAM-only repositories, server-side pagination, statistics endpoints.
-- Silver: offline detection/sync on the frontend, async Faker generation loop on the backend, WebSocket notifications, status endpoint, and UI connection/sync states.
-- Gold: GraphQL interface is available at `/graphql`, frontend infinite scroll uses backend pagination, and fullstack `Book -> QuoteCards` CRUD/statistics are implemented and tested.
+```powershell
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-## Run Tests
+2. On the frontend machine, set `frontend/.env`:
+
+```text
+VITE_API_BASE_URL=http://<backend-lan-ip>:8000
+```
+
+3. Run:
+
+```powershell
+cd frontend
+npm run dev -- --host 0.0.0.0
+```
+
+The backend CORS regex in `backend/.env.example` allows localhost and IPv4 LAN origins by default.
+
+## Tests
 
 Backend:
 
 ```powershell
 cd backend
-.\.venv\Scripts\Activate.ps1
 pytest
 ```
 
 Frontend unit/component tests:
 
 ```powershell
+cd frontend
 npm test
-```
-
-Frontend coverage:
-
-```powershell
 npm run coverage
 ```
 
-Playwright E2E:
+Playwright:
 
 ```powershell
 # Terminal 1
-cd backend
-.\.venv\Scripts\Activate.ps1
-uvicorn app.main:app --reload
+docker compose up -d postgres mongodb
 
 # Terminal 2
-npm run dev
+cd backend
+alembic upgrade head
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 3
+cd frontend
+npm run dev
+
+# Terminal 4
+cd frontend
 npm run test:e2e
 ```
 
-## Main Endpoints
+## Implemented Features
 
-- `GET /books?page=1&page_size=10` and `GET /api/books?page=1&page_size=10`
-- `POST /books`, `GET /books/{book_id}`, `PUT /books/{book_id}`, `DELETE /books/{book_id}`
-- `POST /books/scrape`
-- `GET /books/{book_id}/quote-cards`, `POST /books/{book_id}/quote-cards`
-- `PUT /quote-cards/{quote_card_id}`, `DELETE /quote-cards/{quote_card_id}`
-- `GET /stats`, `GET /stats/genres`, `GET /stats/sources`, `GET /stats/monthly`, `GET /stats/quotes`
-- `POST /automation/faker/start`, `POST /automation/faker/stop`, `GET /automation/faker/status`
-- `WS /ws/books`
-- `POST /graphql`
+- Persistent Book and QuoteCard CRUD with one-to-many `Book -> QuoteCards`.
+- PostgreSQL-backed pagination, filters, statistics, auth sessions, roles, permissions, logs, observation list, and Idea Nexus data.
+- Admin and normal user demo roles with visible frontend restrictions.
+- MongoDB-backed realtime chat over WebSockets for separate logged-in users.
+- Suspicious behavior detection for repeated failed login, restricted access, delete bursts, and chat spam.
+- Existing REST, GraphQL, offline queue/sync, WebSocket book updates, Faker loop, scraper, cookies, infinite scroll, and insights behavior are preserved.
 
-## GraphQL Demo
+## JetBrains PostgreSQL Inspection
 
-GraphQL uses the same RAM-only users, sessions, services, and repositories as REST. A book created through REST appears in GraphQL, and GraphQL mutations write to the same in-memory repositories.
+Open the JetBrains Database tool window, add PostgreSQL, and use:
 
-1. Open `http://127.0.0.1:8000/graphql`.
-2. Run a register or login mutation:
+- URL: `jdbc:postgresql://localhost:5432/bookscape_db`
+- User: `bookscape`
+- Password: `bookscape_password`
 
-```graphql
-mutation {
-  register(name: "reader", email: "reader@example.com", password: "secret123") {
-    token
-    user {
-      id
-      name
-      email
-    }
-  }
-}
-```
-
-3. Copy the returned token.
-4. In GraphiQL HTTP headers, add:
-
-```json
-{
-  "Authorization": "Bearer <token>"
-}
-```
-
-5. Run the paginated books query:
-
-```graphql
-query {
-  books(page: 1, pageSize: 10) {
-    items {
-      id
-      title
-      author
-    }
-    total
-  }
-}
-```
-
-GraphiQL executes one selected operation at a time. If a document contains multiple anonymous operations, name them and choose one operation, or run the register/login mutation first and then the books query separately.
-
-## Offline Demo
-
-Use browser DevTools Network Offline to demonstrate offline mode. Add/update/delete books while offline, then switch back online to see queued operations sync. This is the recommended demo path because it keeps the in-memory backend session alive.
-
-If the backend is stopped or restarted, server data and sessions are cleared by design because the assignment requires RAM-only storage. BookScape keeps safe client-side offline state, including the last known user id/name/email, cached books, and queued Book CRUD operations. It does not store plaintext passwords and does not pretend the server session survived.
-
-After a backend restart, the old login may fail because the RAM-only backend forgot the account. The app keeps queued offline changes and shows that the in-memory server session expired. Try logging in first; if the account no longer exists, re-register with the same email/name and enter a password again. BookScape keeps the queue scoped by email, reuses the new token/session, and retries syncing the existing offline queue.
-
-## Known Limitations
-
-- User accounts and sessions are mock/in-memory and reset when the backend restarts. After a restart, log in/register again before queued offline changes can sync.
-- Real sites can block scraping or omit metadata. The backend returns a clear error when fetching is blocked and uses small defaults only for missing fields such as unknown author, genre, or rating.
-- Offline queueing is implemented for Book CRUD; QuoteCard CRUD is online-first.
-- Server data is intentionally lost on restart because Assignment 2 forbids persistence.
+Run `alembic upgrade head` before inspecting tables.

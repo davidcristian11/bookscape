@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.dependencies import quote_card_service
+from app.dependencies import logging_service, quote_card_service
 from app.routes.auth import require_authenticated_user
 from app.schemas.auth import UserResponse
 from app.schemas.quote_card import (
@@ -47,6 +47,12 @@ def create_quote(
     )
     if created_quote is None:
         raise HTTPException(status_code=404, detail="Book not found")
+    logging_service.log_action(
+        user_id=current_user.id,
+        role_name=current_user.role,
+        action="create_quote_card",
+        details=f"Created quote card {created_quote.id} for book {book_id}",
+    )
 
     return created_quote
 
@@ -65,6 +71,12 @@ def update_quote(
     )
     if updated_quote is None:
         raise HTTPException(status_code=404, detail="Quote not found")
+    logging_service.log_action(
+        user_id=current_user.id,
+        role_name=current_user.role,
+        action="update_quote_card",
+        details=f"Updated quote card {quote_id}",
+    )
 
     return updated_quote
 
@@ -78,3 +90,9 @@ def delete_quote(
     deleted = quote_card_service.delete_quote(current_user.id, quote_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Quote not found")
+    logging_service.log_action(
+        user_id=current_user.id,
+        role_name=current_user.role,
+        action="delete_quote_card",
+        details=f"Deleted quote card {quote_id}",
+    )

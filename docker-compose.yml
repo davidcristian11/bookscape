@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bookscape-postgres
+    environment:
+      POSTGRES_USER: bookscape
+      POSTGRES_PASSWORD: bookscape_password
+      POSTGRES_DB: bookscape_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - bookscape_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookscape -d bookscape_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongodb:
+    image: mongo:7
+    container_name: bookscape-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - bookscape_mongodb_data:/data/db
+
+volumes:
+  bookscape_postgres_data:
+  bookscape_mongodb_data:

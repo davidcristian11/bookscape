@@ -1,17 +1,29 @@
-class SessionRepository:
-    def __init__(self) -> None:
-        self._sessions: dict[str, str] = {}
+from sqlalchemy import delete, select
 
+from app.database import session_scope
+from app.models.user_model import SessionToken
+
+
+class SessionRepository:
     def create(self, token: str, user_id: str) -> str:
-        self._sessions[token] = user_id
-        return token
+        with session_scope() as session:
+            session.add(SessionToken(token=token, user_id=user_id))
+            return token
 
     def get_user_id(self, token: str) -> str | None:
-        return self._sessions.get(token)
+        with session_scope() as session:
+            return session.scalar(
+                select(SessionToken.user_id).where(SessionToken.token == token)
+            )
 
     def delete(self, token: str) -> bool:
-        removed = self._sessions.pop(token, None)
-        return removed is not None
+        with session_scope() as session:
+            existing = session.get(SessionToken, token)
+            if existing is None:
+                return False
+            session.delete(existing)
+            return True
 
     def clear(self) -> None:
-        self._sessions.clear()
+        with session_scope() as session:
+            session.execute(delete(SessionToken))

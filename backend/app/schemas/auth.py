@@ -44,6 +44,10 @@ class UserResponse(BaseModel):
     id: str
     name: str
     email: str
+    role: str = "user"
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
+    is_admin: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

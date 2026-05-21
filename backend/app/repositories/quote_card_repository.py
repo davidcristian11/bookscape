@@ -1,33 +1,42 @@
+from sqlalchemy import delete, select
+
+from app.database import session_scope
 from app.models.quote_card_model import QuoteCard
 
 
 class QuoteCardRepository:
-    def __init__(self) -> None:
-        self._quotes: dict[str, QuoteCard] = {}
-
     def create(self, quote: QuoteCard) -> QuoteCard:
-        self._quotes[quote.id] = quote
-        return quote
+        with session_scope() as session:
+            session.add(quote)
+            session.flush()
+            session.refresh(quote)
+            return quote
 
     def list_by_book(self, user_id: str, book_id: str) -> list[QuoteCard]:
-        return [
-            quote
-            for quote in self._quotes.values()
-            if quote.user_id == user_id and quote.book_id == book_id
-        ]
+        with session_scope() as session:
+            return list(
+                session.scalars(
+                    select(QuoteCard)
+                    .where(QuoteCard.user_id == user_id, QuoteCard.book_id == book_id)
+                    .order_by(QuoteCard.created_at.asc())
+                ).all()
+            )
 
     def list_all(self, user_id: str) -> list[QuoteCard]:
-        return [
-            quote
-            for quote in self._quotes.values()
-            if quote.user_id == user_id
-        ]
+        with session_scope() as session:
+            return list(
+                session.scalars(
+                    select(QuoteCard)
+                    .where(QuoteCard.user_id == user_id)
+                    .order_by(QuoteCard.created_at.asc())
+                ).all()
+            )
 
     def get_by_id(self, user_id: str, quote_id: str) -> QuoteCard | None:
-        quote = self._quotes.get(quote_id)
-        if quote is None or quote.user_id != user_id:
-            return None
-        return quote
+        with session_scope() as session:
+            return session.scalar(
+                select(QuoteCard).where(QuoteCard.id == quote_id, QuoteCard.user_id == user_id)
+            )
 
     def update(
         self,
@@ -35,30 +44,47 @@ class QuoteCardRepository:
         quote_id: str,
         updated_quote: QuoteCard,
     ) -> QuoteCard | None:
-        existing = self._quotes.get(quote_id)
-        if existing is None or existing.user_id != user_id:
-            return None
+        with session_scope() as session:
+            existing = session.scalar(
+                select(QuoteCard).where(QuoteCard.id == quote_id, QuoteCard.user_id == user_id)
+            )
+            if existing is None:
+                return None
 
-        self._quotes[quote_id] = updated_quote
-        return updated_quote
+            for field in (
+                "quote",
+                "note",
+                "relationship_label",
+                "position_x",
+                "position_y",
+                "updated_at",
+            ):
+                setattr(existing, field, getattr(updated_quote, field))
+
+            session.flush()
+            session.refresh(existing)
+            return existing
 
     def delete(self, user_id: str, quote_id: str) -> bool:
-        existing = self._quotes.get(quote_id)
-        if existing is None or existing.user_id != user_id:
-            return False
+        with session_scope() as session:
+            existing = session.scalar(
+                select(QuoteCard).where(QuoteCard.id == quote_id, QuoteCard.user_id == user_id)
+            )
+            if existing is None:
+                return False
 
-        self._quotes.pop(quote_id, None)
-        return True
+            session.delete(existing)
+            return True
 
     def delete_by_book(self, user_id: str, book_id: str) -> None:
-        quote_ids_to_delete = [
-            quote.id
-            for quote in self._quotes.values()
-            if quote.user_id == user_id and quote.book_id == book_id
-        ]
-
-        for quote_id in quote_ids_to_delete:
-            self._quotes.pop(quote_id, None)
+        with session_scope() as session:
+            session.execute(
+                delete(QuoteCard).where(
+                    QuoteCard.user_id == user_id,
+                    QuoteCard.book_id == book_id,
+                )
+            )
 
     def clear(self) -> None:
-        self._quotes.clear()
+        with session_scope() as session:
+            session.execute(delete(QuoteCard))

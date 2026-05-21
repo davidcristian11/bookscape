@@ -1,0 +1,512 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import ScrapeModal from "./ScrapeModal";
+import { deleteBook, createBook } from "../api/booksApi";
+import { getFakerLoopStatus, startFakerLoop, stopFakerLoop } from "../api/automationApi";
+import useBooksOfflineSync from "../hooks/useBooksOfflineSync";
+import useBooksRealtime from "../hooks/useBooksRealtime";
+import useInfiniteBooks from "../hooks/useInfiniteBooks";
+import "./Library.css";
+
+const setCookie = (name, value, days) => {
+  const date = new Date();
+  date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = `${name}=${value};expires=${date.toUTCString()};path=/`;
+};
+
+const getCookie = (name) => {
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return match ? match[2] : null;
+};
+
+const listVariants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.045,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0 },
+};
+
+function renderStars(rating) {
+  return "*".repeat(rating) + "-".repeat(5 - rating);
+}
+
+function LoadingLibrary() {
+  return (
+    <div className="loading-state" role="status">
+      <p>Loading books...</p>
+      <div className="skeleton-stack" aria-hidden="true">
+        <div className="skeleton-card" />
+        <div className="skeleton-card" />
+        <div className="skeleton-card" />
+      </div>
+    </div>
+  );
+}
+
+export default function LibraryPage() {
+  const shouldReduceMotion = useReducedMotion();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState(
+    getCookie("bookscape_view_mode") || getCookie("libraryViewPreference") || "list"
+  );
+
+  const [automationLoading, setAutomationLoading] = useState(false);
+  const [isFakerRunning, setIsFakerRunning] = useState(false);
+
+  const loadMoreTriggerRef = useRef(null);
+
+  const itemsPerPage = viewMode === "grid" ? 6 : 3;
+
+  const {
+    books,
+    totalBooks,
+    loadingInitial,
+    loadingMore,
+    error,
+    hasMore,
+    loadNextPage,
+    refreshFromStart,
+  } = useInfiniteBooks(itemsPerPage);
+
+  const {
+    isOfflineMode,
+    offlineQueueCount,
+    isSyncingQueue,
+    connectionMessage,
+    queueText,
+  } = useBooksOfflineSync(refreshFromStart);
+
+  const { isRealtimeConnected } = useBooksRealtime(
+    useCallback(
+      (event) => {
+        if (
+          event.type === "book_created" ||
+          event.type === "book_updated" ||
+          event.type === "book_deleted" ||
+          event.type === "ws_reconnected"
+        ) {
+          refreshFromStart();
+        }
+
+        if (event.type === "faker_started") {
+          setIsFakerRunning(true);
+        }
+
+        if (event.type === "faker_stopped") {
+          setIsFakerRunning(false);
+        }
+      },
+      [refreshFromStart]
+    )
+  );
+
+  useEffect(() => {
+    getFakerLoopStatus()
+      .then((status) => setIsFakerRunning(status.running))
+      .catch(() => setIsFakerRunning(false));
+  }, []);
+
+  useEffect(() => {
+    const sentinel = loadMoreTriggerRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (
+          firstEntry.isIntersecting &&
+          hasMore &&
+          !loadingInitial &&
+          !loadingMore
+        ) {
+          loadNextPage();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "300px 0px",
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loadingInitial, loadingMore, loadNextPage, books.length]);
+
+  const handleViewChange = (mode) => {
+    setViewMode(mode);
+    setCookie("bookscape_view_mode", mode, 30);
+    setCookie("bookscape_page_size", mode === "grid" ? "6" : "3", 30);
+  };
+
+  const handleDeleteBook = async (id) => {
+    if (!window.confirm("Delete this book and its quote cards?")) {
+      return;
+    }
+
+    try {
+      await deleteBook(id);
+      await refreshFromStart();
+    } catch (err) {
+      alert(err.message || "Failed to delete book.");
+    }
+  };
+
+  const handleAddBook = async (newBookPayload) => {
+    await createBook(newBookPayload);
+    await refreshFromStart();
+  };
+
+  const handleToggleFakerLoop = async () => {
+    try {
+      setAutomationLoading(true);
+      if (isFakerRunning) {
+        await stopFakerLoop();
+        setIsFakerRunning(false);
+      } else {
+        await startFakerLoop(2);
+        setIsFakerRunning(true);
+      }
+    } catch (err) {
+      alert(err.message || "Failed to update faker loop.");
+    } finally {
+      setAutomationLoading(false);
+    }
+  };
+
+  const showEmptyState = !loadingInitial && !error && books.length === 0;
+  const realtimeNeedsAttention = navigator.onLine && !isRealtimeConnected;
+  const authSyncRequired = (connectionMessage || "").includes("server session expired");
+  const messageNeedsAttention = [
+    "Offline mode active",
+    "Server unreachable",
+    "Syncing...",
+    "Sync failed",
+    "Synced successfully",
+  ].includes(connectionMessage) || authSyncRequired;
+  const showConnectionBanner =
+    !navigator.onLine ||
+    isOfflineMode ||
+    offlineQueueCount > 0 ||
+    isSyncingQueue ||
+    messageNeedsAttention ||
+    realtimeNeedsAttention;
+  const fakerButtonLabel = automationLoading
+    ? "Working..."
+    : isFakerRunning
+      ? "Stop Faker Loop"
+      : "Start Faker Loop";
+
+  const interactiveMotion = shouldReduceMotion
+    ? {}
+    : {
+        whileHover: { y: -1 },
+        whileTap: { scale: 0.98 },
+      };
+  const revealMotion = shouldReduceMotion
+    ? {}
+    : {
+        initial: "hidden",
+        animate: "visible",
+        variants: listVariants,
+      };
+
+  return (
+    <div className="library-container">
+      <header className="library-header page-header">
+        <div>
+          <span className="section-kicker">Your collection</span>
+          <h1>My Library</h1>
+          <p className="page-subtitle">
+            A polished reading shelf for scraped metadata, manual additions, reviews, and quote cards.
+          </p>
+        </div>
+
+        <div className="library-controls">
+          <div className="view-toggle" aria-label="View mode">
+            <button
+              className={`toggle-btn ${viewMode === "list" ? "active" : ""}`}
+              onClick={() => handleViewChange("list")}
+              aria-pressed={viewMode === "list"}
+              type="button"
+            >
+              List
+            </button>
+            <button
+              className={`toggle-btn ${viewMode === "grid" ? "active" : ""}`}
+              onClick={() => handleViewChange("grid")}
+              aria-pressed={viewMode === "grid"}
+              type="button"
+            >
+              Grid
+            </button>
+          </div>
+
+          <motion.button
+            className={`scrape-btn faker-toggle-btn ${isFakerRunning ? "danger" : ""}`}
+            onClick={handleToggleFakerLoop}
+            disabled={automationLoading}
+            type="button"
+            {...interactiveMotion}
+          >
+            {fakerButtonLabel}
+          </motion.button>
+
+          <motion.button
+            className="scrape-btn"
+            onClick={() => setIsModalOpen(true)}
+            type="button"
+            {...interactiveMotion}
+          >
+            + Add New Book
+          </motion.button>
+        </div>
+      </header>
+
+      <AnimatePresence>
+        {showConnectionBanner && (
+          <motion.div
+            className={`review-card connection-banner ${isSyncingQueue ? "syncing" : ""}`}
+            role="status"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h3>
+              {!navigator.onLine
+                ? "Offline mode active"
+                : authSyncRequired
+                  ? "Sync paused: re-authentication required"
+                  : realtimeNeedsAttention
+                    ? "Realtime updates disconnected, retrying..."
+                    : offlineQueueCount > 0
+                      ? queueText || `${offlineQueueCount} changes queued`
+                      : connectionMessage}
+            </h3>
+
+            <p>
+              {!navigator.onLine || isOfflineMode
+                ? "CRUD actions are stored locally and will sync when the connection comes back."
+                : realtimeNeedsAttention
+                  ? "Live updates are reconnecting in the background."
+                  : authSyncRequired
+                    ? "Your offline queue is preserved. Log in or register again when ready, then BookScape will retry syncing."
+                    : connectionMessage === "Synced successfully"
+                      ? "Your queued changes are now reflected in the library."
+                      : isSyncingQueue
+                        ? "The app is online again and queued changes are being synchronized."
+                        : "Queued changes will sync automatically when the server is reachable."}
+            </p>
+
+            {(queueText || offlineQueueCount > 0) && (
+              <p style={{ marginTop: "0.75rem", fontWeight: "bold" }}>
+                {queueText || `Queued operations: ${offlineQueueCount}`}
+              </p>
+            )}
+
+            {authSyncRequired && (
+              <div className="recovery-actions">
+                <Link className="view-details-btn" to="/login">
+                  Log in to sync
+                </Link>
+                <Link className="scrape-submit-btn" to="/register">
+                  Re-register account
+                </Link>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {loadingInitial && <LoadingLibrary />}
+      {error && <p className="error-text">{error}</p>}
+
+      {showEmptyState && (
+        <motion.div
+          className="review-card empty-state"
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24 }}
+        >
+          <h3>Your library is empty</h3>
+          <p>
+            Start the backend Faker loop to watch live books arrive, or add and scrape one manually.
+          </p>
+
+          <div className="empty-actions">
+            <motion.button
+              className="scrape-submit-btn"
+              onClick={handleToggleFakerLoop}
+              disabled={automationLoading}
+              type="button"
+              {...interactiveMotion}
+            >
+              {fakerButtonLabel}
+            </motion.button>
+
+            <motion.button
+              className="cancel-btn"
+              onClick={() => setIsModalOpen(true)}
+              type="button"
+              {...interactiveMotion}
+            >
+              Add Manually
+            </motion.button>
+          </div>
+        </motion.div>
+      )}
+
+      {!loadingInitial && !error && books.length > 0 && viewMode === "list" && (
+        <motion.div
+          className="table-container"
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24 }}
+        >
+          <table className="books-table">
+            <thead>
+              <tr>
+                <th>Cover</th>
+                <th>Title & Author</th>
+                <th>Genre</th>
+                <th>Rating</th>
+                <th>Source</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+
+            <motion.tbody {...revealMotion}>
+              {books.map((book) => (
+                <motion.tr
+                  key={book.id}
+                  className={book._offline ? "is-pending" : ""}
+                  variants={shouldReduceMotion ? undefined : itemVariants}
+                >
+                  <td>
+                    {book.cover_url ? (
+                      <img src={book.cover_url} alt={book.title} className="table-cover" />
+                    ) : (
+                      <div className="mock-cover" aria-hidden="true" />
+                    )}
+                  </td>
+
+                  <td>
+                    <div className="book-title-stack">
+                      <strong>{book.title}</strong>
+                      <p className="author-text">
+                        {book.author}
+                        {book._offline && <span className="pending-chip">pending sync</span>}
+                      </p>
+                    </div>
+                  </td>
+
+                  <td>
+                    <span className="genre-badge">{book.genre}</span>
+                  </td>
+
+                  <td className="rating-stars">{renderStars(book.rating)}</td>
+
+                  <td className="source-text">{book.source}</td>
+
+                  <td className="actions-cell">
+                    <div className="actions-group">
+                      <Link to={`/book/${book.id}`} className="action-icon" title="View details">
+                        View
+                      </Link>
+                      <motion.button
+                        onClick={() => handleDeleteBook(book.id)}
+                        className="action-icon delete"
+                        title="Delete book"
+                        type="button"
+                        {...interactiveMotion}
+                      >
+                        Delete
+                      </motion.button>
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </motion.tbody>
+          </table>
+        </motion.div>
+      )}
+
+      {!loadingInitial && !error && books.length > 0 && viewMode === "grid" && (
+        <motion.div className="grid-container" {...revealMotion}>
+          {books.map((book) => (
+            <motion.div
+              key={book.id}
+              className={`book-grid-card ${book._offline ? "is-pending" : ""}`}
+              variants={shouldReduceMotion ? undefined : itemVariants}
+              whileHover={shouldReduceMotion ? undefined : { y: -4 }}
+              transition={{ duration: 0.18 }}
+            >
+              {book.cover_url ? (
+                <img src={book.cover_url} alt={book.title} className="grid-cover" />
+              ) : (
+                <div className="grid-cover" aria-hidden="true" />
+              )}
+
+              <div className="grid-card-content">
+                <strong>{book.title}</strong>
+                <p className="author-text">
+                  {book.author}
+                  {book._offline && <span className="pending-chip">pending sync</span>}
+                </p>
+                <p className="author-text">
+                  {book.genre} - {book.source}
+                </p>
+
+                <div className="grid-card-footer">
+                  <span className="rating-stars">{renderStars(book.rating)}</span>
+                  <Link to={`/book/${book.id}`} className="view-details-btn">
+                    View
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
+
+      {!loadingInitial && books.length > 0 && (
+        <div className="pagination">
+          <span>
+            Loaded {books.length} of {totalBooks} books
+          </span>
+
+          <div className="page-controls">
+            {loadingMore ? (
+              <span>Loading more...</span>
+            ) : hasMore ? (
+              <span>Scroll for more</span>
+            ) : (
+              <span>All books loaded</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div ref={loadMoreTriggerRef} style={{ height: "1px", width: "100%" }} />
+
+      <ScrapeModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onAddBook={handleAddBook}
+        onBookCreated={refreshFromStart}
+      />
+    </div>
+  );
+}

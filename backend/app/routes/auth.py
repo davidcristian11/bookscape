@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
-from app.dependencies import auth_service, seed_service
+from app.dependencies import auth_service, logging_service, seed_service
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -42,6 +42,24 @@ def require_authenticated_user(
             detail="Invalid or expired session",
         )
 
+    return user
+
+
+def require_admin_user(
+    authorization: str | None = Header(default=None),
+) -> UserResponse:
+    user = require_authenticated_user(authorization)
+    if not user.is_admin:
+        logging_service.log_action(
+            user_id=user.id,
+            role_name=user.role,
+            action="forbidden_action",
+            details="Attempted to access admin-only area",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
     return user
 
 

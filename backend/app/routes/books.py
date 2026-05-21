@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from app.dependencies import book_service, quote_card_service, realtime_service
+from app.dependencies import book_service, logging_service, quote_card_service, realtime_service
 from app.routes.auth import require_authenticated_user
 from app.schemas.auth import UserResponse
 from app.schemas.book import (
@@ -21,6 +21,12 @@ async def create_book(
     current_user: UserResponse = Depends(require_authenticated_user),
 ) -> BookResponse:
     created_book = book_service.create_book(current_user.id, payload)
+    logging_service.log_action(
+        user_id=current_user.id,
+        role_name=current_user.role,
+        action="create_book",
+        details=f"Created book {created_book.id}: {created_book.title}",
+    )
 
     await realtime_service.broadcast_to_user(
         current_user.id,
@@ -46,6 +52,12 @@ async def scrape_book(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+    logging_service.log_action(
+        user_id=current_user.id,
+        role_name=current_user.role,
+        action="create_book",
+        details=f"Scraped book {created_book.id}: {created_book.title}",
+    )
 
     await realtime_service.broadcast_to_user(
         current_user.id,
@@ -63,9 +75,23 @@ async def scrape_book(
 async def list_books(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
+    genre: str | None = Query(None, min_length=1),
+    source: str | None = Query(None, min_length=1),
+    rating_min: int | None = Query(None, ge=0, le=5),
+    rating_max: int | None = Query(None, ge=0, le=5),
+    search: str | None = Query(None, min_length=1),
     current_user: UserResponse = Depends(require_authenticated_user),
 ) -> PaginatedBooksResponse:
-    return book_service.list_books(current_user.id, page=page, page_size=page_size)
+    return book_service.list_books(
+        current_user.id,
+        page=page,
+        page_size=page_size,
+        genre=genre,
+        source=source,
+        rating_min=rating_min,
+        rating_max=rating_max,
+        search=search,
+    )
 
 
 @router.get("/{book_id}", response_model=BookResponse)
@@ -89,6 +115,12 @@ async def update_book(
     updated_book = book_service.update_book(current_user.id, book_id, payload)
     if updated_book is None:
         raise HTTPException(status_code=404, detail="Book not found")
+    logging_service.log_action(
+        user_id=current_user.id,
+        role_name=current_user.role,
+        action="update_book",
+        details=f"Updated book {book_id}: {updated_book.title}",
+    )
 
     await realtime_service.broadcast_to_user(
         current_user.id,
@@ -110,6 +142,12 @@ async def delete_book(
     deleted = book_service.delete_book(current_user.id, book_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Book not found")
+    logging_service.log_action(
+        user_id=current_user.id,
+        role_name=current_user.role,
+        action="delete_book",
+        details=f"Deleted book {book_id}",
+    )
 
     quote_card_service.delete_quotes_for_book(current_user.id, book_id)
 

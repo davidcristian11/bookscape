@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -5,6 +6,7 @@ from app.models.book_model import Book
 from app.models.quote_card_model import QuoteCard
 from app.repositories.book_repository import BookRepository
 from app.repositories.quote_card_repository import QuoteCardRepository
+from app.repositories.user_repository import UserRepository
 
 
 class SeedService:
@@ -12,9 +14,50 @@ class SeedService:
         self,
         book_repository: BookRepository,
         quote_repository: QuoteCardRepository,
+        user_repository: UserRepository,
     ) -> None:
         self.book_repository = book_repository
         self.quote_repository = quote_repository
+        self.user_repository = user_repository
+
+    def _hash_password(self, password: str) -> str:
+        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+    def seed_auth_defaults(self) -> None:
+        permissions = {
+            "books:read": "Read books and statistics",
+            "books:write": "Create and update books",
+            "books:delete": "Delete books",
+            "quote_cards:write": "Create, update, and delete quote cards",
+            "chat:write": "Send chat messages",
+            "admin:read": "View admin-only areas",
+            "logs:read": "View logs and observation list",
+        }
+
+        for name, description in permissions.items():
+            self.user_repository.ensure_permission(name, description)
+
+        self.user_repository.ensure_role("admin", "Administrator with full BookScape access")
+        self.user_repository.ensure_role("user", "Normal reader with library and chat access")
+
+        for permission in permissions:
+            self.user_repository.assign_permission_to_role("admin", permission)
+
+        for permission in ("books:read", "books:write", "quote_cards:write", "chat:write"):
+            self.user_repository.assign_permission_to_role("user", permission)
+
+        self.user_repository.ensure_user(
+            name="BookScape Admin",
+            email="admin@bookscape.test",
+            password_hash=self._hash_password("admin123"),
+            role_name="admin",
+        )
+        self.user_repository.ensure_user(
+            name="BookScape Reader",
+            email="reader@bookscape.test",
+            password_hash=self._hash_password("reader123"),
+            role_name="user",
+        )
 
     def seed_user_library(self, user_id: str) -> None:
         if self.book_repository.list_all(user_id):

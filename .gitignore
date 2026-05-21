@@ -8,13 +8,27 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+frontend/node_modules/
 dist
+frontend/dist/
 dist-ssr
 *.local
+.env
+backend/.env
+frontend/.env
+.venv/
+backend/.venv/
 __pycache__/
 *.py[cod]
 .tmp/
+backend/.tmp/
 backend/.deps/
+coverage/
+frontend/coverage/
+htmlcov/
+backend/htmlcov/
+.coverage
+backend/.coverage
 
 # Editor directories and files
 .vscode/*
@@ -30,6 +44,8 @@ backend/.deps/
 # Playwright
 /test-results/
 /playwright-report/
+frontend/test-results/
+frontend/playwright-report/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/

@@ -59,19 +59,31 @@ class BookService:
             ),
         )
 
-    def list_books(self, user_id: str, page: int, page_size: int) -> PaginatedBooksResponse:
-        books = sorted(
-            self.repository.list_all(user_id),
-            key=lambda book: book.created_at or datetime.min.replace(tzinfo=timezone.utc),
-            reverse=True,
+    def list_books(
+        self,
+        user_id: str,
+        page: int,
+        page_size: int,
+        genre: str | None = None,
+        source: str | None = None,
+        rating_min: int | None = None,
+        rating_max: int | None = None,
+        search: str | None = None,
+    ) -> PaginatedBooksResponse:
+        books, total = self.repository.list_page(
+            user_id,
+            page,
+            page_size,
+            genre=genre,
+            source=source,
+            rating_min=rating_min,
+            rating_max=rating_max,
+            search=search,
         )
-        total = len(books)
         total_pages = ceil(total / page_size) if total > 0 else 0
-        start_index = (page - 1) * page_size
-        paginated_books = books[start_index:start_index + page_size]
 
         return PaginatedBooksResponse(
-            items=[self._to_response(book) for book in paginated_books],
+            items=[self._to_response(book) for book in books],
             total=total,
             page=page,
             page_size=page_size,

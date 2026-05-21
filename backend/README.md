@@ -1,40 +1,88 @@
 # BookScape Backend
 
-FastAPI backend for BookScape. Data is stored only in process memory through repository classes.
+FastAPI backend for BookScape Assignment 3. PostgreSQL is the source of truth for books, quote cards, users, roles, permissions, sessions, logs, observations, and Idea Nexus data. MongoDB stores chat messages.
 
-Run:
+## Setup
 
 ```powershell
+cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+copy .env.example .env
 ```
 
-Run tests:
+Start PostgreSQL and MongoDB from the project root:
 
 ```powershell
+docker compose up -d postgres mongodb
+```
+
+Run migrations:
+
+```powershell
+cd backend
+alembic upgrade head
+```
+
+Run the API:
+
+```powershell
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Demo Credentials
+
+- Admin: `admin@bookscape.test` / `admin123`
+- Normal user: `reader@bookscape.test` / `reader123`
+
+These are seeded at startup after the database schema exists.
+
+## Tests
+
+```powershell
+cd backend
 pytest
 ```
 
-Main modules:
+Tests use a SQLite database file under `backend/.tmp/` and `memory://` chat storage so they do not require Docker.
 
-- `routes/`: HTTP and WebSocket entry points
-- `schemas/`: Pydantic request/response validation
-- `services/`: business logic
-- `repositories/`: RAM-only collections
-- `models/`: internal dataclass domain models
+## Main Modules
 
-Important behavior:
+- `database.py`: SQLAlchemy engine/session/Base
+- `alembic/`: relational schema migrations
+- `models/`: SQLAlchemy ORM models
+- `repositories/`: database-backed data access
+- `services/`: business logic, logging, suspicious behavior rules, chat storage
+- `routes/`: REST and WebSocket entry points
+- `schemas/`: Pydantic request/response models
 
-- `POST /books/scrape` fetches the submitted page with `httpx`, a safe timeout, and a project User-Agent.
-- The scraper parses JSON-LD schema.org Book data, OpenGraph tags, meta descriptions, page title, author/image/rating/year fields, and source names for Goodreads, Amazon, Barnes & Noble, Open Library, or generic pages.
-- `POST /automation/faker/start`, `POST /automation/faker/stop`, and `GET /automation/faker/status` control the required async Faker loop. Generated books are broadcast through `/ws/books`.
-- On registration, `SeedService` creates RAM-only demo Books and QuoteCards so Idea Nexus has meaningful first-run data.
-- Tests mock scraper network behavior; they do not depend on live external websites.
-- GraphQL uses the same auth/session mechanism as REST. In GraphiQL, add `{"Authorization": "Bearer <token>"}` to HTTP headers, or run the `login` GraphQL mutation first and copy the returned token.
-- Backend restarts clear sessions and data because all assignment storage is RAM-only.
-- The frontend may keep a client-side offline Book CRUD queue and minimal last-known profile data while the backend is unreachable. After a backend restart, users must log in again, or re-register with the same email if the RAM-only account no longer exists, before that client-side queue can sync with the new in-memory session.
-- For offline demonstrations, prefer browser DevTools Network Offline over stopping the backend, because stopping the backend intentionally resets RAM-only users, sessions, books, and quote cards.
+## Main Endpoints
 
-No database or persistence layer is used.
+- `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
+- `GET /books?page=1&page_size=10`, with optional `genre`, `source`, `rating_min`, `rating_max`, `search`
+- `POST /books`, `GET /books/{id}`, `PUT /books/{id}`, `DELETE /books/{id}`
+- `POST /books/scrape`
+- `GET/POST /books/{book_id}/quote-cards`
+- `PUT/DELETE /quote-cards/{quote_card_id}`
+- `GET /stats`, `/stats/genres`, `/stats/sources`, `/stats/monthly`, `/stats/quotes`
+- `GET /admin/observation-list`, `GET /admin/logs`
+- `GET /chat/messages`, `POST /chat/messages`, `WS /ws/chat`
+- `POST /automation/faker/start`, `POST /automation/faker/stop`, `GET /automation/faker/status`
+- `WS /ws/books`
+- `POST /graphql`
+
+The same routes are also exposed under `/api/...` for compatibility.
+
+## JetBrains Database Inspection
+
+In JetBrains Database tool window, add a PostgreSQL data source:
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `bookscape_db`
+- User: `bookscape`
+- Password: `bookscape_password`
+
+Then inspect tables such as `books`, `quote_cards`, `users`, `roles`, `permissions`, `log_entries`, and `observation_list_entries`.

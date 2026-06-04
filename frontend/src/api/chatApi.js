@@ -1,5 +1,5 @@
 import { getAuthToken, markAuthSessionExpired } from "../utils/authStorage";
-import { API_BASE_URL, toWebSocketBaseUrl } from "./config";
+import { API_BASE_URL, WS_BASE_URL } from "./config";
 
 function extractErrorMessage(data) {
   if (!data) return "Request failed";
@@ -43,5 +43,5 @@ export function getChatMessages(limit = 50) {
 }
 
 export function buildChatWebSocketUrl(token = getAuthToken()) {
-  return `${toWebSocketBaseUrl(API_BASE_URL)}/ws/chat?token=${encodeURIComponent(token || "")}`;
+  return `${WS_BASE_URL}/ws/chat?token=${encodeURIComponent(token || "")}`;
 }

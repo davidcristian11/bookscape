@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, s
 from pydantic import ValidationError
 
 from app.dependencies import auth_service, chat_service, logging_service
-from app.routes.auth import require_authenticated_user
+from app.routes.auth import require_permission
 from app.schemas.auth import UserResponse
 from app.schemas.chat import ChatMessageCreate, ChatMessageResponse
 
@@ -12,7 +12,7 @@ router = APIRouter(tags=["chat"])
 @router.get("/chat/messages", response_model=list[ChatMessageResponse])
 async def list_chat_messages(
     limit: int = Query(50, ge=1, le=200),
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("chat:read")),
 ) -> list[ChatMessageResponse]:
     return await chat_service.list_messages(limit)
 
@@ -20,7 +20,7 @@ async def list_chat_messages(
 @router.post("/chat/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
 async def create_chat_message(
     payload: ChatMessageCreate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("chat:write")),
 ) -> ChatMessageResponse:
     saved = await chat_service.save_message(current_user, payload.message)
     logging_service.log_action(
@@ -41,7 +41,7 @@ async def chat_websocket(websocket: WebSocket) -> None:
         return
 
     current_user = auth_service.get_current_user(token)
-    if current_user is None:
+    if current_user is None or "chat:write" not in current_user.permissions:
         await websocket.close(code=4401, reason="Invalid or expired session")
         return
 

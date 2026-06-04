@@ -1,9 +1,9 @@
-import { getStoredUser } from "./authStorage";
+import { getLastKnownUser, getStoredUser } from "./authStorage";
 
 const BOOKS_CHANGED_EVENT = "bookscape:books-changed";
 
 function getCurrentUserScope() {
-  const user = getStoredUser();
+  const user = getStoredUser() || getLastKnownUser();
   return user?.email ?? user?.id ?? "anonymous";
 }
 

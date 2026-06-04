@@ -8,7 +8,7 @@ from app.models.activity_model import LogEntry, ObservationListEntry
 from app.models.book_model import Book
 from app.models.nexus_model import NexusEdge, NexusNode
 from app.models.quote_card_model import QuoteCard
-from app.models.user_model import Permission, Role, SessionToken, User
+from app.models.user_model import PasswordResetToken, Permission, Role, SessionToken, User
 
 
 class UserRepository:
@@ -98,6 +98,14 @@ class UserRepository:
             if all(existing.id != role.id for existing in user.roles):
                 user.roles.append(role)
 
+    def update_password_hash(self, user_id: str, password_hash: str) -> bool:
+        with session_scope() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                return False
+            user.password_hash = password_hash
+            return True
+
     def ensure_user(
         self,
         *,
@@ -124,6 +132,7 @@ class UserRepository:
     def clear(self) -> None:
         with session_scope() as session:
             session.execute(delete(SessionToken))
+            session.execute(delete(PasswordResetToken))
             session.execute(delete(LogEntry))
             session.execute(delete(ObservationListEntry))
             session.execute(delete(NexusEdge))

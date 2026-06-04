@@ -1,4 +1,6 @@
 const TOKEN_KEY = "bookscape_auth_token";
+const REFRESH_TOKEN_KEY = "bookscape_refresh_token";
+const TOKEN_EXPIRES_AT_KEY = "bookscape_token_expires_at";
 const USER_KEY = "bookscape_auth_user";
 const LAST_USER_KEY = "bookscape_last_known_user";
 const SESSION_RECOVERY_KEY = "bookscape_session_recovery_message";
@@ -13,7 +15,16 @@ export function getAuthChangedEventName() {
 }
 
 export function saveAuthSession(authData) {
-  localStorage.setItem(TOKEN_KEY, authData.token);
+  const accessToken = authData.access_token || authData.token;
+  if (accessToken) {
+    localStorage.setItem(TOKEN_KEY, accessToken);
+  }
+  if (authData.refresh_token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, authData.refresh_token);
+  }
+  if (authData.expires_at) {
+    localStorage.setItem(TOKEN_EXPIRES_AT_KEY, authData.expires_at);
+  }
   localStorage.setItem(USER_KEY, JSON.stringify(authData.user));
   localStorage.setItem(LAST_USER_KEY, JSON.stringify(authData.user));
   localStorage.removeItem(SESSION_RECOVERY_KEY);
@@ -22,6 +33,14 @@ export function saveAuthSession(authData) {
 
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function getTokenExpiresAt() {
+  return localStorage.getItem(TOKEN_EXPIRES_AT_KEY);
 }
 
 export function getStoredUser() {
@@ -52,11 +71,13 @@ export function markAuthSessionExpired(message) {
   const user = getStoredUser() || getLastKnownUser();
 
   if (user) {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
     localStorage.setItem(LAST_USER_KEY, JSON.stringify(user));
   }
 
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
+  localStorage.removeItem(USER_KEY);
   localStorage.setItem(SESSION_RECOVERY_KEY, message);
 
   if (existingToken || existingMessage !== message) {
@@ -74,6 +95,8 @@ export function hasOfflineSession() {
 
 export function clearAuthSession() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(LAST_USER_KEY);
   localStorage.removeItem(SESSION_RECOVERY_KEY);
@@ -81,5 +104,5 @@ export function clearAuthSession() {
 }
 
 export function isAuthenticated() {
-  return Boolean(getAuthToken() || getStoredUser());
+  return Boolean(getAuthToken());
 }

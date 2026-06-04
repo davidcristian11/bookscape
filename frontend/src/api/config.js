@@ -8,3 +8,6 @@ export function toWebSocketBaseUrl(httpUrl = API_BASE_URL) {
 
   return httpUrl.replace("http://", "ws://");
 }
+
+export const WS_BASE_URL =
+  import.meta.env.VITE_WS_URL ?? toWebSocketBaseUrl(API_BASE_URL);

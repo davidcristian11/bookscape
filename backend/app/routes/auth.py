@@ -1,7 +1,16 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
 
 from app.dependencies import auth_service, logging_service, seed_service
-from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
+from app.schemas.auth import (
+    AuthResponse,
+    LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    PasswordResetResponse,
+    RegisterRequest,
+    RefreshRequest,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -49,7 +58,7 @@ def require_admin_user(
     authorization: str | None = Header(default=None),
 ) -> UserResponse:
     user = require_authenticated_user(authorization)
-    if not user.is_admin:
+    if not user.is_admin or "logs:read" not in user.permissions:
         logging_service.log_action(
             user_id=user.id,
             role_name=user.role,
@@ -63,13 +72,54 @@ def require_admin_user(
     return user
 
 
+def require_role(*allowed_roles: str):
+    def dependency(
+        current_user: UserResponse = Depends(require_authenticated_user),
+    ) -> UserResponse:
+        if not set(allowed_roles).intersection(current_user.roles):
+            logging_service.log_action(
+                user_id=current_user.id,
+                role_name=current_user.role,
+                action="forbidden_action",
+                details=f"Missing role: {', '.join(allowed_roles)}",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient role",
+            )
+        return current_user
+
+    return dependency
+
+
+def require_permission(permission: str):
+    def dependency(
+        current_user: UserResponse = Depends(require_authenticated_user),
+    ) -> UserResponse:
+        if permission not in current_user.permissions:
+            logging_service.log_action(
+                user_id=current_user.id,
+                role_name=current_user.role,
+                action="forbidden_action",
+                details=f"Missing permission: {permission}",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permission",
+            )
+        return current_user
+
+    return dependency
+
+
 @router.post(
     "/register",
     response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def register(payload: RegisterRequest) -> AuthResponse:
+def register(payload: RegisterRequest = Body(...)) -> AuthResponse:
     try:
+        seed_service.seed_auth_defaults()
         auth_response = auth_service.register(payload)
         seed_service.seed_user_library(auth_response.user.id)
         return auth_response
@@ -81,9 +131,21 @@ def register(payload: RegisterRequest) -> AuthResponse:
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(payload: LoginRequest) -> AuthResponse:
+def login(payload: LoginRequest = Body(...)) -> AuthResponse:
     try:
+        seed_service.seed_auth_defaults()
         return auth_service.login(payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/refresh", response_model=AuthResponse)
+def refresh(payload: RefreshRequest = Body(...)) -> AuthResponse:
+    try:
+        return auth_service.refresh(payload)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -110,3 +172,23 @@ def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
         )
 
     return {"message": "Logged out successfully"}
+
+
+@router.post("/password-reset/request", response_model=PasswordResetResponse)
+def request_password_reset(
+    payload: PasswordResetRequest = Body(...),
+) -> PasswordResetResponse:
+    return auth_service.request_password_reset(payload)
+
+
+@router.post("/password-reset/confirm", response_model=PasswordResetResponse)
+def reset_password(
+    payload: PasswordResetConfirmRequest = Body(...),
+) -> PasswordResetResponse:
+    try:
+        return auth_service.reset_password(payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc

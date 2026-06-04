@@ -60,6 +60,18 @@ vi.mock("./components/RegisterPage", () => ({
   default: () => <h1>Register Mock</h1>,
 }));
 
+vi.mock("./components/ForgotPasswordPage", () => ({
+  default: () => <h1>Forgot Password Mock</h1>,
+}));
+
+vi.mock("./components/ResetPasswordPage", () => ({
+  default: () => <h1>Reset Password Mock</h1>,
+}));
+
+vi.mock("./components/AuthSessionMonitor", () => ({
+  default: () => null,
+}));
+
 vi.mock("./components/LibraryPage", () => ({
   default: () => <h1>Library Mock</h1>,
 }));
@@ -137,6 +149,17 @@ describe("App routing", () => {
     window.dispatchEvent(new PopStateEvent("popstate"));
     rerender(<App />);
     expect(await screen.findByText("Admin Mock")).toBeInTheDocument();
+  });
+
+  it("blocks the admin route for normal users", async () => {
+    authState.authenticated = true;
+    authState.token = "token-1";
+    authState.user = { name: "Reader", role: "user", roles: ["user"] };
+    push("/admin");
+
+    render(<App />);
+
+    expect(await screen.findByText(/admin access required/i)).toBeInTheDocument();
   });
 
   it("redirects authenticated users away from public-only routes", async () => {

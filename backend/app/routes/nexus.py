@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.dependencies import nexus_service
-from app.routes.auth import require_authenticated_user
+from app.routes.auth import require_permission
 from app.schemas.auth import UserResponse
 from app.schemas.nexus import (
     NexusEdgeCreate,
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/nexus", tags=["nexus"])
 
 @router.get("", response_model=NexusGraphResponse)
 def get_graph(
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:read")),
 ) -> NexusGraphResponse:
     return nexus_service.get_graph(current_user.id)
 
@@ -29,7 +29,7 @@ def get_graph(
 )
 def create_node(
     payload: NexusNodeCreate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("nexus:write")),
 ) -> NexusNodeResponse:
     return nexus_service.create_node(current_user.id, payload)
 
@@ -38,7 +38,7 @@ def create_node(
 def update_node(
     node_id: str,
     payload: NexusNodeUpdate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("nexus:write")),
 ) -> NexusNodeResponse:
     updated = nexus_service.update_node(current_user.id, node_id, payload)
     if updated is None:
@@ -50,7 +50,7 @@ def update_node(
 @router.delete("/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_node(
     node_id: str,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("nexus:write")),
 ) -> None:
     deleted = nexus_service.delete_node(current_user.id, node_id)
     if not deleted:
@@ -64,7 +64,7 @@ def delete_node(
 )
 def create_edge(
     payload: NexusEdgeCreate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("nexus:write")),
 ) -> NexusEdgeResponse:
     try:
         return nexus_service.create_edge(current_user.id, payload)
@@ -75,7 +75,7 @@ def create_edge(
 @router.delete("/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_edge(
     edge_id: str,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("nexus:write")),
 ) -> None:
     deleted = nexus_service.delete_edge(current_user.id, edge_id)
     if not deleted:

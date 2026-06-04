@@ -1,7 +1,7 @@
-import hashlib
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.core.security import hash_password
 from app.models.book_model import Book
 from app.models.quote_card_model import QuoteCard
 from app.repositories.book_repository import BookRepository
@@ -20,15 +20,15 @@ class SeedService:
         self.quote_repository = quote_repository
         self.user_repository = user_repository
 
-    def _hash_password(self, password: str) -> str:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
     def seed_auth_defaults(self) -> None:
         permissions = {
             "books:read": "Read books and statistics",
             "books:write": "Create and update books",
             "books:delete": "Delete books",
             "quote_cards:write": "Create, update, and delete quote cards",
+            "nexus:write": "Create and manage Idea Nexus nodes and edges",
+            "automation:write": "Start and stop personal Faker book generation",
+            "chat:read": "Read chat messages",
             "chat:write": "Send chat messages",
             "admin:read": "View admin-only areas",
             "logs:read": "View logs and observation list",
@@ -43,19 +43,28 @@ class SeedService:
         for permission in permissions:
             self.user_repository.assign_permission_to_role("admin", permission)
 
-        for permission in ("books:read", "books:write", "quote_cards:write", "chat:write"):
+        for permission in (
+            "books:read",
+            "books:write",
+            "books:delete",
+            "quote_cards:write",
+            "nexus:write",
+            "automation:write",
+            "chat:read",
+            "chat:write",
+        ):
             self.user_repository.assign_permission_to_role("user", permission)
 
         self.user_repository.ensure_user(
             name="BookScape Admin",
             email="admin@bookscape.test",
-            password_hash=self._hash_password("admin123"),
+            password_hash=hash_password("admin123"),
             role_name="admin",
         )
         self.user_repository.ensure_user(
             name="BookScape Reader",
             email="reader@bookscape.test",
-            password_hash=self._hash_password("reader123"),
+            password_hash=hash_password("reader123"),
             role_name="user",
         )
 

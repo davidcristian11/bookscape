@@ -27,6 +27,13 @@ def _require_current_user(info: Info) -> UserResponse:
     return current_user
 
 
+def _require_permission(info: Info, permission: str) -> UserResponse:
+    current_user = _require_current_user(info)
+    if permission not in current_user.permissions:
+        raise GraphQLError("Forbidden")
+    return current_user
+
+
 @strawberry.type
 class BookType:
     id: str
@@ -67,11 +74,14 @@ class UserType:
     id: str
     name: str
     email: str
+    role: str
+    permissions: list[str]
 
 
 @strawberry.type
 class AuthPayloadType:
     token: str
+    refresh_token: str | None
     user: UserType
 
 
@@ -151,11 +161,21 @@ def _map_quote(quote: QuoteCardResponse) -> QuoteCardType:
 
 
 def _map_user(user: UserResponse) -> UserType:
-    return UserType(id=user.id, name=user.name, email=user.email)
+    return UserType(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        role=user.role,
+        permissions=user.permissions,
+    )
 
 
 def _map_auth(auth: AuthResponse) -> AuthPayloadType:
-    return AuthPayloadType(token=auth.token, user=_map_user(auth.user))
+    return AuthPayloadType(
+        token=auth.token,
+        refresh_token=auth.refresh_token,
+        user=_map_user(auth.user),
+    )
 
 
 async def get_graphql_context(request: Request) -> dict:
@@ -176,7 +196,7 @@ async def get_graphql_context(request: Request) -> dict:
 class Query:
     @strawberry.field
     async def books(self, info: Info, page: int = 1, page_size: int = 10) -> BooksPageType:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "books:read")
         result = book_service.list_books(current_user.id, page, page_size)
         return BooksPageType(
             items=[_map_book(book) for book in result.items],
@@ -188,13 +208,13 @@ class Query:
 
     @strawberry.field
     async def book(self, info: Info, id: str) -> BookType | None:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "books:read")
         book = book_service.get_book(current_user.id, id)
         return _map_book(book) if book else None
 
     @strawberry.field
     async def quote_cards_by_book(self, info: Info, book_id: str) -> list[QuoteCardType]:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "books:read")
         quotes = quote_card_service.list_quotes_by_book(current_user.id, book_id)
         if quotes is None:
             raise GraphQLError("Book not found")
@@ -211,6 +231,7 @@ class Mutation:
     @strawberry.mutation
     async def register(self, name: str, email: str, password: str) -> AuthPayloadType:
         try:
+            seed_service.seed_auth_defaults()
             auth = auth_service.register(
                 RegisterRequest(name=name, email=email, password=password)
             )
@@ -224,6 +245,7 @@ class Mutation:
     @strawberry.mutation
     async def login(self, email: str, password: str) -> AuthPayloadType:
         try:
+            seed_service.seed_auth_defaults()
             auth = auth_service.login(LoginRequest(email=email, password=password))
         except ValueError as exc:
             raise GraphQLError(str(exc)) from exc
@@ -233,7 +255,7 @@ class Mutation:
 
     @strawberry.mutation
     async def create_book(self, info: Info, input: CreateBookInput) -> BookType:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "books:write")
         try:
             created = book_service.create_book(current_user.id, BookCreate(**input.__dict__))
         except ValidationError as exc:
@@ -248,7 +270,7 @@ class Mutation:
 
     @strawberry.mutation
     async def update_book(self, info: Info, id: str, input: UpdateBookInput) -> BookType:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "books:write")
         try:
             updated = book_service.update_book(current_user.id, id, BookUpdate(**input.__dict__))
         except ValidationError as exc:
@@ -265,7 +287,7 @@ class Mutation:
 
     @strawberry.mutation
     async def delete_book(self, info: Info, id: str) -> bool:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "books:delete")
         deleted = book_service.delete_book(current_user.id, id)
         if deleted:
             logging_service.log_action(
@@ -278,7 +300,7 @@ class Mutation:
 
     @strawberry.mutation
     async def create_quote_card(self, info: Info, input: CreateQuoteInput) -> QuoteCardType:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "quote_cards:write")
         try:
             created = quote_card_service.create_quote(
                 current_user.id,
@@ -299,7 +321,7 @@ class Mutation:
 
     @strawberry.mutation
     async def update_quote_card(self, info: Info, quote_id: str, input: UpdateQuoteInput) -> QuoteCardType:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "quote_cards:write")
         try:
             updated = quote_card_service.update_quote(current_user.id, quote_id, QuoteCardUpdate(**input.__dict__))
         except ValidationError as exc:
@@ -316,7 +338,7 @@ class Mutation:
 
     @strawberry.mutation
     async def delete_quote_card(self, info: Info, quote_id: str) -> bool:
-        current_user = _require_current_user(info)
+        current_user = _require_permission(info, "quote_cards:write")
         deleted = quote_card_service.delete_quote(current_user.id, quote_id)
         if deleted:
             logging_service.log_action(

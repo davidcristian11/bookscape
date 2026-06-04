@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "./config";
+import { markAuthSessionExpired } from "../utils/authStorage";
 
 function extractErrorMessage(data) {
   if (!data) return "Request failed";
@@ -20,12 +21,13 @@ function extractErrorMessage(data) {
 }
 
 async function request(path, options = {}) {
+  const { clearOnUnauthorized = false, ...fetchOptions } = options;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
 
   let data = null;
@@ -36,6 +38,9 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
+    if (response.status === 401 && clearOnUnauthorized) {
+      markAuthSessionExpired("Your server session expired. Please sign in again.");
+    }
     throw new Error(extractErrorMessage(data));
   }
 
@@ -56,9 +61,18 @@ export async function loginUser(payload) {
   });
 }
 
+export async function refreshSession(refreshToken) {
+  return request("/auth/refresh", {
+    method: "POST",
+    clearOnUnauthorized: true,
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+}
+
 export async function getCurrentUser(token) {
   return request("/auth/me", {
     method: "GET",
+    clearOnUnauthorized: true,
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -71,5 +85,19 @@ export async function logoutUser(token) {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function requestPasswordReset(email) {
+  return request("/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(payload) {
+  return request("/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }

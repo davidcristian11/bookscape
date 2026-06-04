@@ -14,7 +14,7 @@ async def books_websocket(websocket: WebSocket) -> None:
         return
 
     current_user = auth_service.get_current_user(token)
-    if current_user is None:
+    if current_user is None or "books:read" not in current_user.permissions:
         await websocket.close(code=4401, reason="Invalid or expired session")
         return
 

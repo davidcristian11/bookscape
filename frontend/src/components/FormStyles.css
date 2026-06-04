@@ -136,11 +136,23 @@
   padding: 0.85rem;
 }
 
+.success-text {
+  border: 1px solid rgba(44, 122, 83, 0.28);
+  background: #eefaf2;
+  color: #276044;
+  padding: 0.85rem;
+}
+
 .helper-text p {
   margin: 0 0 0.55rem;
 }
 
-.helper-text a {
+.success-text p {
+  margin: 0 0 0.55rem;
+}
+
+.helper-text a,
+.success-text a {
   color: var(--primary-green);
   font-weight: 900;
 }

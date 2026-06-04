@@ -149,6 +149,26 @@ test.describe('BookScape E2E', () => {
     await expect(page.getByRole('heading', { name: /admin access required/i })).toBeVisible();
   });
 
+  test('password recovery flow works with a dev reset token', async ({ page }) => {
+    const email = `reset-${Date.now()}@bookscape.test`;
+    await register(page, email);
+    await page.getByRole('button', { name: /logout/i }).click();
+    await expect(page).toHaveURL(/\/login/);
+
+    await page.getByRole('link', { name: /forgot your password/i }).click();
+    await page.getByPlaceholder('your@email.com').fill(email);
+    await page.getByRole('button', { name: /send reset token/i }).click();
+    await page.getByRole('link', { name: /continue to reset password/i }).click();
+
+    await page.getByPlaceholder('New password').fill('newsecret123');
+    await page.getByPlaceholder('Confirm password').fill('newsecret123');
+    await page.getByRole('button', { name: /reset password/i }).click();
+    await expect(page).toHaveURL(/\/login/);
+
+    await login(page, email, 'newsecret123');
+    await expect(page.getByRole('heading', { name: /my library/i })).toBeVisible();
+  });
+
   test('chat broadcasts between two logged-in users', async ({ browser }) => {
     const adminContext = await browser.newContext();
     const readerContext = await browser.newContext();

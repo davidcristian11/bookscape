@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.dependencies import logging_service, quote_card_service
-from app.routes.auth import require_authenticated_user
+from app.routes.auth import require_permission
 from app.schemas.auth import UserResponse
 from app.schemas.quote_card import (
     QuoteCardCreate,
@@ -16,7 +16,7 @@ router = APIRouter(tags=["quotes"])
 @router.get("/books/{book_id}/quote-cards", response_model=list[QuoteCardResponse])
 def list_quotes_by_book(
     book_id: str,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:read")),
 ) -> list[QuoteCardResponse]:
     quotes = quote_card_service.list_quotes_by_book(current_user.id, book_id)
     if quotes is None:
@@ -38,7 +38,7 @@ def list_quotes_by_book(
 def create_quote(
     book_id: str,
     payload: QuoteCardCreate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("quote_cards:write")),
 ) -> QuoteCardResponse:
     created_quote = quote_card_service.create_quote(
         current_user.id,
@@ -62,7 +62,7 @@ def create_quote(
 def update_quote(
     quote_id: str,
     payload: QuoteCardUpdate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("quote_cards:write")),
 ) -> QuoteCardResponse:
     updated_quote = quote_card_service.update_quote(
         current_user.id,
@@ -85,7 +85,7 @@ def update_quote(
 @router.delete("/quote-cards/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_quote(
     quote_id: str,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("quote_cards:write")),
 ) -> None:
     deleted = quote_card_service.delete_quote(current_user.id, quote_id)
     if not deleted:

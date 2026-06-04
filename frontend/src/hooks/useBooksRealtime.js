@@ -5,7 +5,7 @@ import {
   markAuthSessionExpired,
 } from "../utils/authStorage";
 import { removeLocalBook, upsertLocalBook } from "../utils/localBooksStore";
-import { API_BASE_URL, toWebSocketBaseUrl } from "../api/config";
+import { WS_BASE_URL } from "../api/config";
 
 export default function useBooksRealtime(onEvent = null) {
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
@@ -49,7 +49,7 @@ export default function useBooksRealtime(onEvent = null) {
       setRealtimeMessage("Realtime updates connecting...");
 
       websocket = new WebSocket(
-        `${toWebSocketBaseUrl(API_BASE_URL)}/ws/books?token=${encodeURIComponent(authToken)}`
+        `${WS_BASE_URL}/ws/books?token=${encodeURIComponent(authToken)}`
       );
 
       websocket.onopen = () => {

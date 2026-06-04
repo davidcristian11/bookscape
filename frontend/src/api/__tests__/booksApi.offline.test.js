@@ -149,7 +149,8 @@ describe("booksApi offline queue", () => {
     expect(getLocalBooksCache()).toHaveLength(1);
     expect(getLocalBooksCache()[0]._syncStatus).toBe("auth-required");
     expect(localStorage.getItem("bookscape_auth_token")).toBeNull();
-    expect(localStorage.getItem("bookscape_auth_user")).toContain("reader@example.com");
+    expect(localStorage.getItem("bookscape_auth_user")).toBeNull();
+    expect(localStorage.getItem("bookscape_last_known_user")).toContain("reader@example.com");
     expect(localStorage.getItem("bookscape_session_recovery_message")).toMatch(/server session expired/i);
   });
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.dependencies import book_service, logging_service, quote_card_service, realtime_service
-from app.routes.auth import require_authenticated_user
+from app.routes.auth import require_permission
 from app.schemas.auth import UserResponse
 from app.schemas.book import (
     BookCreate,
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/books", tags=["books"])
 @router.post("", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
 async def create_book(
     payload: BookCreate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:write")),
 ) -> BookResponse:
     created_book = book_service.create_book(current_user.id, payload)
     logging_service.log_action(
@@ -43,7 +43,7 @@ async def create_book(
 @router.post("/scrape", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
 async def scrape_book(
     payload: ScrapeBookRequest,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:write")),
 ) -> BookResponse:
     try:
         created_book = book_service.scrape_book(current_user.id, payload)
@@ -80,7 +80,7 @@ async def list_books(
     rating_min: int | None = Query(None, ge=0, le=5),
     rating_max: int | None = Query(None, ge=0, le=5),
     search: str | None = Query(None, min_length=1),
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:read")),
 ) -> PaginatedBooksResponse:
     return book_service.list_books(
         current_user.id,
@@ -97,7 +97,7 @@ async def list_books(
 @router.get("/{book_id}", response_model=BookResponse)
 async def get_book(
     book_id: str,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:read")),
 ) -> BookResponse:
     book = book_service.get_book(current_user.id, book_id)
     if book is None:
@@ -110,7 +110,7 @@ async def get_book(
 async def update_book(
     book_id: str,
     payload: BookUpdate,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:write")),
 ) -> BookResponse:
     updated_book = book_service.update_book(current_user.id, book_id, payload)
     if updated_book is None:
@@ -137,7 +137,7 @@ async def update_book(
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_book(
     book_id: str,
-    current_user: UserResponse = Depends(require_authenticated_user),
+    current_user: UserResponse = Depends(require_permission("books:delete")),
 ) -> Response:
     deleted = book_service.delete_book(current_user.id, book_id)
     if not deleted:

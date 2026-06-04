@@ -4,6 +4,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import WelcomePage from "./components/WelcomePage";
 import LoginPage from "./components/LoginPage";
 import RegisterPage from "./components/RegisterPage";
+import ForgotPasswordPage from "./components/ForgotPasswordPage";
+import ResetPasswordPage from "./components/ResetPasswordPage";
 import Navbar from "./components/Navbar";
 import LibraryPage from "./components/LibraryPage";
 import BookDetailPage from "./components/BookDetailPage";
@@ -13,6 +15,7 @@ import ChatPage from "./components/ChatPage";
 import AdminPage from "./components/AdminPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicOnlyRoute from "./components/PublicOnlyRoute";
+import AuthSessionMonitor from "./components/AuthSessionMonitor";
 import { recordVisit } from "./utils/activityCookies";
 
 function ActivityMonitor() {
@@ -45,6 +48,8 @@ function AnimatedRoutes() {
           <Route element={<PublicOnlyRoute />}>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
 
           <Route element={<ProtectedRoute />}>
@@ -53,6 +58,9 @@ function AnimatedRoutes() {
             <Route path="/book/:id" element={<BookDetailPage />} />
             <Route path="/nexus" element={<IdeaNexus />} />
             <Route path="/chat" element={<ChatPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute requiredRole="admin" />}>
             <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Routes>
@@ -65,6 +73,7 @@ function App() {
   return (
     <BrowserRouter>
       <ActivityMonitor />
+      <AuthSessionMonitor />
       <Navbar />
       <AnimatedRoutes />
     </BrowserRouter>

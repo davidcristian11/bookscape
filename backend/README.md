@@ -45,7 +45,7 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --ssl-keyfile
 
 These are seeded at startup after the database schema exists.
 
-## Assignment 4 Auth Notes
+## Auth Notes
 
 - Passwords are salted PBKDF2-HMAC-SHA256 hashes. Existing legacy SHA-256 hashes are upgraded after successful login.
 - JWT access tokens include user id, session id, role, roles, permissions, issued-at, and expiry.
